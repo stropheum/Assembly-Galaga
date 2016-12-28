@@ -1,0 +1,2262 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.15.04
+Created On: 12/28/2016 11:44:47 AM
+
+00000000                             1  *-----------------------------------------------------------
+00000000                             2  * Title      : Assembly Game
+00000000                             3  * Written by : Dale Diaz
+00000000                             4  * Date       :
+00000000                             5  * Description: A galaga clone which utilizes randomness, acceleration, a score and player input
+00000000                             6  *-----------------------------------------------------------
+00000000                             7          
+00000000                             8  *********************
+00000000                             9  *** Global Values ***
+00000000                            10  *********************
+00000000                            11  ALL_REG                     REG     D0-D7/A0-A6
+00000000                            12  LINE_RENDERING_REGS         REG     D0-D4
+00000000  =0000003C                 13  ALL_REG_BYTE_SIZE           EQU     60
+00000000  =00000004                 14  ARG_1                       EQU     4
+00000000  =00000008                 15  ARG_2                       EQU     8
+00000000  =0000000C                 16  ARG_3                       EQU     12
+00000000  =00000010                 17  ARG_4                       EQU     16
+00000000  =00000014                 18  ARG_5                       EQU     20
+00000000  =00000018                 19  ARG_6                       EQU     24   
+00000000  =00000004                 20  ONE_ARG                     EQU     4
+00000000  =00000008                 21  TWO_ARGS                    EQU     8
+00000000  =0000000C                 22  THREE_ARGS                  EQU     12
+00000000  =00000010                 23  FOUR_ARGS                   EQU     16
+00000000  =00000014                 24  FIVE_ARGS                   EQU     20
+00000000  =00000018                 25  SIX_ARGS                    EQU     24  
+00000000  =00000050                 26  SET_PEN_COLOR_COMMAND       EQU     80
+00000000  =00000052                 27  DRAW_PIXEL_COMMAND          EQU     82
+00000000  =0000005C                 28  SET_DRAWING_MODE_COMMAND    EQU     92
+00000000  =00000011                 29  ENABLE_DOUBLE_BUFFERING     EQU     17
+00000000  =0000005E                 30  REPAINT_SCREEN              EQU     94
+00000000  =00000013                 31  LISTEN_FOR_INPUTS           EQU     19
+00000000  =00000008                 32  ONE_BYTE                    EQU     8
+00000000  =00000018                 33  BitsPerPixel                EQU     24
+00000000  =00000003                 34  BytesPerPixel               EQU     3
+00000000  =00000020                 35  SPACE_KEY                   EQU     $20
+00000000  =00000008                 36  GET_TIME_COMMAND            EQU     8
+00000000                            37     
+00001000                            38  START:  ORG    $1000
+00001000  23FC 00000001 000E4B1E    39      move.l      #1, FIRST_RUN       // Toggle start screen on first playthrough
+0000100A                            40      *** Enable double buffering ***
+0000100A  705C                      41      move.l      #SET_DRAWING_MODE_COMMAND, D0
+0000100C  7211                      42      move.l      #ENABLE_DOUBLE_BUFFERING, D1
+0000100E  4E4F                      43      trap        #15
+00001010                            44      
+00001010  23FC 00000001 000E4AEC    45      move.l      #1, BackgroundMusicPlaying
+0000101A  203C 0000004A             46      move.l      #LOAD_DIRECT_X_TASK, D0
+00001020  43F9 000E4AD7             47      lea         BackgroundMusic, A1
+00001026  7200                      48      move.l      #0, D1
+00001028  4E4F                      49      trap        #15
+0000102A  203C 0000004D             50      move.l      #CONTROL_DIRECT_X_TASK, D0
+00001030  243C 00000001             51      move.l      #DIRECT_X_LOOP_CMD, D2
+00001036  4E4F                      52      trap        #15
+00001038                            53      
+00001038                            54  START_NEW_GAME:
+00001038                            55      *** Lock Player on start screen until they press Enter ***
+00001038                            56  SHOW_START_SCREEN:
+00001038  0CB9 00000001 000E4B1E    57      cmp.l       #1, FIRST_RUN
+00001042  6600 0010                 58      bne         BYPASS_START_SCREEN
+00001046  4EB9 0000209E             59      JSR         DISPLAY_START_TEXT
+0000104C  4EB9 00002072             60      JSR         LISTEN_FOR_GAME_START
+00001052  60E4                      61      bra         SHOW_START_SCREEN
+00001054                            62  BYPASS_START_SCREEN:
+00001054                            63  
+00001054  23FC 00000001 000E4B22    64      move.l      #1, FIRST_REPAINT
+0000105E                            65  
+0000105E                            66      *** Wipe screen ***
+0000105E  223C 0000FF00             67      move.l      #CLEAR_SCREEN_VALUE, D1
+00001064  203C 0000000B             68      move.l      #CLEAR_SCREEN_TASK, D0
+0000106A  4E4F                      69      trap        #15
+0000106C                            70  
+0000106C                            71      *** Display Loading Text ***
+0000106C  203C 0000005F             72      move.l      #DISPLAY_TEXT_TRAP_TASK, D0
+00001072  223C 00000118             73      move.l      #LOADING_TEXT_X_POS, D1
+00001078  243C 000000F0             74      move.l      #LOADING_TEXT_Y_POS, D2
+0000107E  43F9 000E4AF0             75      lea         LOADING_TEXT, A1
+00001084  4E4F                      76      trap        #15
+00001086  705E                      77      move.l      #REPAINT_SCREEN, D0
+00001088  4E4F                      78      trap        #15
+0000108A                            79      
+0000108A                            80      *** Add background image to the stack and generate bitmap data ***
+0000108A  41F9 00002138             81      lea         BackgroundImage, A0
+00001090  2F08                      82      move.l      A0, -(SP)
+00001092  4EB9 00001272             83      JSR         GENERATE_BACKGROUND_IMAGE_DATA 
+00001098  7004                      84      move.l      #ONE_ARG, D0
+0000109A  DFC0                      85      add.l       D0, SP
+0000109C                            86      
+0000109C                            87      *** Add player image to the stack and generate bitmap data ***
+0000109C  41F9 000E3186             88      lea         PlayerImage, A0
+000010A2  2F08                      89      move.l      A0, -(SP)
+000010A4  4EB9 00001418             90      JSR         GENERATE_PLAYER_IMAGE_DATA
+000010AA  7004                      91      move.l      #ONE_ARG, D0
+000010AC  DFC0                      92      add.l       D0, SP
+000010AE                            93      
+000010AE                            94      *** Add enemy image to the stack and generate bitmap data ***
+000010AE  41F9 000E3DD8             95      lea         EnemyImage, A0
+000010B4  2F08                      96      move.l      A0, -(SP)
+000010B6  4EB9 0000146E             97      JSR         GENERATE_ENEMY_IMAGE_DATA
+000010BC  7004                      98      move.l      #ONE_ARG, D0
+000010BE  DFC0                      99      add.l       D0, SP
+000010C0                           100      
+000010C0                           101      *** Temp: set static projectile for rendering ***
+000010C0  23FC 000000AA 000E4A32   102      move.l      #170, PROJECTILE_X_POS
+000010CA  23FC 00000184 000E4A36   103      move.l      #PLAYER_Y_POSITION, PROJECTILE_Y_POS
+000010D4                           104  
+000010D4  4EB9 00001372            105      JSR         RENDER_INITIAL_BACKGROUND_IMAGE
+000010DA                           106      *JSR         RENDER_INITIAL_PLAYER_IMAGE
+000010DA                           107      *JSR         RENDER_INITIAL_ENEMY_IMAGE
+000010DA                           108  
+000010DA                           109      *** Initialize player values ***
+000010DA  23FC 00000000 000E3DD4   110      move.l      #0, PLAYER_X_POSITION
+000010E4  7200                     111      move.l      #0, D1                  // Player x
+000010E6  243C 00000184            112      move.l      #PLAYER_Y_POSITION, D2  // Player y
+000010EC  23FC 00000000 000E4A52   113      move.l      #0, PLAYER_X_VEL
+000010F6  23FC 00000000 000E4A56   114      move.l      #0, PLAYER_Y_VEL
+00001100  23FC 00000000 000E4A3E   115      move.l      #0, W_PRESSED
+0000110A  23FC 00000000 000E4A42   116      move.l      #0, A_PRESSED
+00001114  23FC 00000000 000E4A46   117      move.l      #0, S_PRESSED
+0000111E  23FC 00000000 000E4A4A   118      move.l      #0, D_PRESSED
+00001128  23FC 00000001 000E4A5E   119      move.l      #1, PLAYER_ALIVE       // Set player to alive
+00001132  23FC 00000000 000E4A62   120      move.l      #0, PLAYER_POINTS      // Initialize player score
+0000113C  23FC 00000000 000E4A3A   121      move.l      #0, PROJECTILE_FIRED   // Ensure projectile is not initially fired
+00001146                           122      
+00001146                           123      *** Initialize enemy values ***
+00001146  23FC 00000200 000E4A2E   124      move.l      #2<<8, ENEMY_SPEED
+00001150  4EB9 00001FEC            125      JSR         seedRandomNumber
+00001156  4286                     126      clr.l       D6
+00001158  4EB9 0000203E            127      JSR         getRandomLongIntoD6
+0000115E  E08E                     128      lsr.l       #8, D6                  // Shift off lower bits to leave only word length value
+00001160  E08E                     129      lsr.l       #8, D6
+00001162  2A3C 00000260            130      move.l      #608, D5
+00001168  8CC5                     131      divu        D5, D6                  // Divide by screen width-enemy width
+0000116A  E08E                     132      lsr.l       #8, D6                  // Shift off whole part to leave remainder
+0000116C  E08E                     133      lsr.l       #8, D6
+0000116E  23C6 000E4A26            134      move.l      D6, ENEMY_X_POS 
+00001174  23FC 00000000 000E4A2A   135      move.l      #0, ENEMY_Y_POS
+0000117E                           136      
+0000117E                           137  GAME_LOOP:
+0000117E  0CB9 00000001 000E4B22   138      cmp.l       #1, FIRST_REPAINT
+00001188  6700 0006                139      beq         PLAY_START_SOUND
+0000118C  6000 001A                140      bra         BYPASS_PLAY_START_SOUND
+00001190                           141  PLAY_START_SOUND:
+00001190  23FC 00000000 000E4B22   142      move.l      #0, FIRST_REPAINT
+0000119A  203C 00000049            143      move.l      #PLAY_SOUND_TRAP_TASK, D0
+000011A0  43F9 000E4B26            144      lea         FightSound, A1
+000011A6  4E4F                     145      trap        #15
+000011A8                           146  BYPASS_PLAY_START_SOUND
+000011A8                           147      
+000011A8  0CB9 00000001 000E4A5E   148      cmp.l       #1, PLAYER_ALIVE
+000011B2  6600 0062                149      bne         GAME_OVER
+000011B6                           150      
+000011B6                           151      *** Render BG chunk over old player data ***
+000011B6  4EB9 000014C4            152      JSR         CLEAR_PLAYER_IMAGE
+000011BC                           153      
+000011BC                           154      *** TODO: divert rendering bg over old player to subroutine ***
+000011BC  4EB9 000016B8            155      JSR         UPDATE_PLAYER_INPUT         // Update player input values
+000011C2  4EB9 00001A48            156      JSR         UPDATE_PLAYER_VALUES
+000011C8                           157      
+000011C8  2239 000E3DD4            158      move.l      PLAYER_X_POSITION, D1
+000011CE  D2B9 000E4A52            159      add.l       PLAYER_X_VEL, D1
+000011D4                           160      
+000011D4  23C1 000E3DD4            161      move.l      D1, PLAYER_X_POSITION
+000011DA                           162      
+000011DA  4EB9 000019D2            163      JSR         UPDATE_ENEMY_VALUES
+000011E0  4EB9 00001AA8            164      JSR         UPDATE_PLAYER_POSITION      // Clamp player (X:D1, Y:D2) to screen bounds
+000011E6  4EB9 00001B50            165      JSR         HANDLE_PLAYER_COLLISION
+000011EC  4EB9 00001F80            166      JSR         CLEAR_7_SEG_DISPLAY         // Wipe 7seg off screen to prepare for next number    
+000011F2  4EB9 000017D2            167      JSR         RENDER_BG_OVER_PROJECTILE
+000011F8  4EB9 0000186E            168      JSR         UPDATE_PROJECTILE
+000011FE  4EB9 0000182C            169      JSR         RENDER_PROJECTILE
+00001204                           170      
+00001204                           171      *** Display player score on 7seg ***
+00001204  2F39 000E4A62            172      move.l      PLAYER_POINTS, -(SP)
+0000120A  4EB9 00001EE6            173      JSR         RENDER_7SEG_VALUE
+00001210  588F                     174      adda.l      #ONE_ARG, SP
+00001212                           175      
+00001212  6000 0030                176      bra         REDRAW_SCREEN
+00001216                           177  GAME_OVER:
+00001216  203C 0000005F            178      move.l      #DISPLAY_TEXT_TRAP_TASK, D0
+0000121C  223C 000000B9            179      move.l      #GAME_OVER_TEXT_X_POS, D1
+00001222  243C 000000F0            180      move.l      #GAME_OVER_TEXT_Y_POS, D2
+00001228  43F9 000E4AFB            181      lea         GAME_OVER_TEXT, A1
+0000122E  4E4F                     182      trap        #15
+00001230  4EB9 00001B24            183      JSR         LISTEN_FOR_RESTART
+00001236  0CB9 00000001 000E4A5E   184      cmp.l       #1, PLAYER_ALIVE
+00001240  6700 FDF6                185      beq         START_NEW_GAME
+00001244                           186      
+00001244                           187  REDRAW_SCREEN:
+00001244                           188      *** Move buffered image onto screen ***
+00001244  705E                     189      move.l      #REPAINT_SCREEN, D0
+00001246  4E4F                     190      trap        #15
+00001248                           191      
+00001248  6000 FF34                192      bra         GAME_LOOP
+0000124C  FFFF FFFF                193      SIMHALT    
+00001250                           194  
+00001250                           195  **********************************************************************************************************************
+00001250                           196  **********************************************************************************************************************
+00001250                           197  ***     ____                 __          _                _____       __                     __  _                 ***
+00001250                           198  ***    / __ \___  ____  ____/ /__  _____(_)___  ____ _   / ___/__  __/ /_  _________  __  __/ /_(_)___  ___  _____ ***
+00001250                           199  ***   / /_/ / _ \/ __ \/ __  / _ \/ ___/ / __ \/ __ `/   \__ \/ / / / __ \/ ___/ __ \/ / / / __/ / __ \/ _ \/ ___/ ***
+00001250                           200  ***  / _, _/  __/ / / / /_/ /  __/ /  / / / / / /_/ /   ___/ / /_/ / /_/ / /  / /_/ / /_/ / /_/ / / / /  __(__  )  ***
+00001250                           201  *** /_/ |_|\___/_/ /_/\__,_/\___/_/  /_/_/ /_/\__, /   /____/\__,_/_.___/_/   \____/\__,_/\__/_/_/ /_/\___/____/   ***
+00001250                           202  ***                                          /____/                                                                ***
+00001250                           203  **********************************************************************************************************************
+00001250                           204  **********************************************************************************************************************
+00001250                           205  
+00001250                           206  ***********************************************************************
+00001250                           207  *** Byte swaps the value in d7 while preserving all other registers ***
+00001250                           208  ***********************************************************************
+00001250                           209  *** D6: Temporarily holds the swapped data during bit shifting      ***
+00001250                           210  *** D7: Returns the byte swapped value after swapping               ***
+00001250                           211  ***********************************************************************
+00001250                           212  SWAP_LONG_IN_D7:
+00001250  48E7 0200                213      movem.l     D6, -(SP)                     
+00001254                           214  
+00001254  4286                     215      clr.l       D6
+00001256                           216      
+00001256  1C07                     217      move.b      D7, D6
+00001258                           218      
+00001258  E08F                     219      lsr.l       #8, D7
+0000125A  E18E                     220      lsl.l       #8, D6
+0000125C  1C07                     221      move.b      D7, D6
+0000125E                           222      
+0000125E  E08F                     223      lsr.l       #8, D7
+00001260  E18E                     224      lsl.l       #8, D6
+00001262  1C07                     225      move.b      D7, D6
+00001264                           226      
+00001264  E08F                     227      lsr.l       #8, D7
+00001266  E18E                     228      lsl.l       #8, D6
+00001268  1C07                     229      move.b      D7, D6
+0000126A                           230      
+0000126A  2E06                     231      move.l      D6, D7
+0000126C                           232  
+0000126C  4CDF 0040                233      movem.l     (SP)+, D6                        
+00001270  4E75                     234      RTS
+00001272                           235  
+00001272                           236  ******************************************************************************************************************
+00001272                           237  *** Parses through the bitmap data and generates global constants for future rendering to optimize performance ***
+00001272                           238  ******************************************************************************************************************
+00001272                           239  *** D6: Used for storing the number of bytes in the bitmap image                                               ***
+00001272                           240  *** D7: Used for storing temp data of all dimensional values in the file                                       ***
+00001272                           241  ******************************************************************************************************************
+00001272                           242  GENERATE_BACKGROUND_IMAGE_DATA:
+00001272  4CEF 0100 0004           243      movem.l     ARG_1(SP), A0               // Take bitmap image from stack
+00001278  2E39 00002142            244      move.l      BackgroundImageDataOffset, D7
+0000127E  4EB8 1250                245      JSR         SWAP_LONG_IN_D7    
+00001282  D1C7                     246      adda.l      D7, A0                      // Offset a0 to start of image data
+00001284  23C8 000E3176            247      move.l      A0, BackgroundImageData
+0000128A                           248  
+0000128A                           249      *** After image height is determined, swap and store back in variable ***    
+0000128A  2E39 0000214E            250      move.l      (BackgroundHeightLocation), D7
+00001290  4EB8 1250                251      JSR         SWAP_LONG_IN_D7
+00001294  23C7 000E316E            252      move.l      D7, BackgroundImageHeight
+0000129A                           253      
+0000129A  2E39 0000214A            254      move.l      (BackgroundWidthLocation), D7
+000012A0  4EB8 1250                255      JSR         SWAP_LONG_IN_D7
+000012A4                           256      
+000012A4                           257      *** Move the number of unpadded bytes into D6 ***
+000012A4  2C07                     258      move.l      D7, D6
+000012A6  CCFC 0003                259      mulu        #BytesPerPixel, D6          // Multiply number of pixels by bytes per pixel
+000012AA                           260      
+000012AA                           261      *** Compute the number of bytes per row with padding in the image ***
+000012AA  CEFC 0018                262      mulu        #BitsPerPixel, D7           // Computes number of bits within the pixel data
+000012AE  0687 0000001F            263      addi.l      #31, D7                     // Adds just under one word to d7
+000012B4  EA8F                     264      lsr.l       #5, D7                      // d7 /= 32 with 31 padded will truncate remainder bits that aren't divisible by word length
+000012B6  E58F                     265      lsl.l       #2, D7                      // d7 *= 4 will adjust the value back to byte length (net division of 8 from pixel count)
+000012B8  23C7 000E3172            266      move.l      D7, BackgroundImageWidth
+000012BE                           267      
+000012BE                           268      *** Compute the number of padded bytes at the end of a row ***
+000012BE  9E86                     269      sub.l       D6, D7                      // Subtract unpadded row length from padded row length
+000012C0  23C7 000E317A            270      move.l      D7, BackgroundRowPadding    // Store the number of padded bytes
+000012C6  4E75                     271      RTS
+000012C8                           272      
+000012C8                           273  *****************************************************************************
+000012C8                           274  *** Using stored background image data and location/dimension arguments,  ***
+000012C8                           275  *** renders a bitmap chunk to the screen                                  ***
+000012C8                           276  *****************************************************************************
+000012C8                           277  *** D1: x position on screen                                              ***
+000012C8                           278  *** D2: y position on screen                                              ***
+000012C8                           279  *** D4: x chunk start in background image                                 ***
+000012C8                           280  *** D5: y chunk start in background image                                 ***
+000012C8                           281  *** BackgroundChunkWidth: width of all chunks rendered from this image    ***
+000012C8                           282  *** BackgroundChunkHeight: height of all chunks rendered from this image  ***
+000012C8                           283  *****************************************************************************
+000012C8                           284  RENDER_BACKGROUND_CHUNK:
+000012C8  48E7 FFFE                285      movem.l     ALL_REG,-(SP)                    
+000012CC  DFFC 0000003C            286      adda.l      #ALL_REG_BYTE_SIZE, SP           
+000012D2                           287  
+000012D2                           288      *** Handle passed arguments ***    
+000012D2  242F 0004                289      move.l      ARG_1(SP), D2                       // Pull rendering y position from stack
+000012D6  222F 0008                290      move.l      ARG_2(SP), D1                       // Pull rendering x position from stack
+000012DA  23EF 000C 000E3182       291      move.l      ARG_3(SP), BackgroundChunkHeight    // Store rendering height
+000012E2  23EF 0010 000E317E       292      move.l      ARG_4(SP), BackgroundChunkWidth     // Store rendering width
+000012EA  2A2F 0014                293      move.l      ARG_5(SP), D5                       // Pull bitmap y position from stack
+000012EE  282F 0018                294      move.l      ARG_6(SP), D4                       // Pull bitmap x position from stack
+000012F2                           295      
+000012F2  2079 000E3176            296      move.l      BackgroundImageData, A0
+000012F8                           297      
+000012F8                           298      *** Add chunk height to D2 to invert rendering ***
+000012F8  2C39 000E3182            299      move.l      BackgroundChunkHeight, D6           // Store chunk height temporarily
+000012FE  D486                     300      add.l       D6, D2                              // Offset pen y to end of image
+00001300                           301      
+00001300                           302      *** Offset to rendering position of bitmap data ***
+00001300  2E39 000E3172            303      move.l      BackgroundImageWidth, D7
+00001306  CEC5                     304      mulu.w      D5, D7
+00001308                           305      
+00001308  DE84                     306      add.l       D4, D7
+0000130A  DE84                     307      add.l       D4, D7
+0000130C  DE84                     308      add.l       D4, D7    
+0000130E                           309      
+0000130E  D1C7                     310      adda.l      D7, A0
+00001310                           311  
+00001310                           312      *** Initialize rendering loop ***
+00001310  7E00                     313      move.l      #0, D7                              // Initialize D7 as column counter
+00001312  7600                     314      move.l      #0, D3                              // Initialize D3 as row counter
+00001314                           315  ITERATE_OVER_BACKGROUND_CHUNK:
+00001314                           316      *** TODO: Handle rendering ***
+00001314  2C01                     317      move.l      D1, D6                              // Temporary move pen x to D6 while setting pen color
+00001316                           318      
+00001316                           319      *** Move next color to D1 ***
+00001316  4241                     320      clr         D1
+00001318  1218                     321      move.b      (A0)+, D1
+0000131A  E189                     322      lsl.l       #8, D1
+0000131C  1218                     323      move.b      (A0)+, D1
+0000131E  E189                     324      lsl.l       #8, D1
+00001320  1218                     325      move.b      (A0)+, D1
+00001322                           326      
+00001322  7050                     327      move.l      #SET_PEN_COLOR_COMMAND, D0
+00001324  4E4F                     328      trap        #15
+00001326                           329      
+00001326                           330      *** Draw pixel ***
+00001326  2206                     331      move.l      D6, D1                              // Move pen x back to D1
+00001328  7052                     332      move.l      #DRAW_PIXEL_COMMAND, D0
+0000132A  4E4F                     333      trap        #15
+0000132C                           334          
+0000132C  5281                     335      addi.l      #1, D1                              // Offset pen x to the right by one
+0000132E  5287                     336      addi.l      #1, D7                              // Add 1 to column counter
+00001330                           337      
+00001330  2C39 000E317E            338      move.l      BackgroundChunkWidth, D6            // Move chunk width to D6 for comparisons
+00001336  BC87                     339      cmp.l       D7, D6
+00001338  6EDA                     340      bgt         ITERATE_OVER_BACKGROUND_CHUNK
+0000133A                           341      
+0000133A                           342  MOVE_TO_NEXT_LINE_BG_IMAGE:
+0000133A  5382                     343      sub.l       #1, D2                              // Move pen up 1 value
+0000133C  5283                     344      addi.l      #1, D3                              // Increment y counter
+0000133E                           345      
+0000133E  2C39 000E317E            346      move.l      BackgroundChunkWidth, D6
+00001344  9286                     347      sub.l       D6, D1                              // Move pen x back to origin
+00001346                           348      
+00001346                           349      *** Store remaining row bytes in D6 ***
+00001346  2C39 000E3172            350      move.l      BackgroundImageWidth, D6            // Load Image width
+0000134C  2E39 000E317E            351      move.l      BackgroundChunkWidth, D7                
+00001352  CEFC 0003                352      mulu.w      #BytesPerPixel, D7                  // Convert pixels to bytes
+00001356  9C87                     353      sub.l       D7, D6                              // Subtract chunk start pos
+00001358  D1C6                     354      add.l       D6, A0                              // Offset to end of row
+0000135A                           355      
+0000135A  7E00                     356      move.l      #0, D7                              // Reset column counter
+0000135C                           357      
+0000135C  2C39 000E3182            358      move.l      BackgroundChunkHeight, D6           // Move chunk height to d6 for comparisons
+00001362  BC83                     359      cmp.l       D3, D6
+00001364  6EAE                     360      bgt         ITERATE_OVER_BACKGROUND_CHUNK
+00001366                           361  
+00001366  9FFC 0000003C            362      suba.l      #ALL_REG_BYTE_SIZE, SP           
+0000136C  4CDF 7FFF                363      movem.l     (SP)+, ALL_REG                   
+00001370  4E75                     364      RTS
+00001372                           365  
+00001372                           366  **************************************************************************
+00001372                           367  *** Renders entire background chunk to the entirety of the game screen ***
+00001372                           368  **************************************************************************    
+00001372                           369  RENDER_INITIAL_BACKGROUND_IMAGE:
+00001372  48E7 FFFE                370      movem.l     ALL_REG, -(SP)
+00001376                           371  
+00001376  2F3C 00000000            372      move.l      #0, -(SP)               // Start X value of bitmap
+0000137C  2F3C 00000000            373      move.l      #0, -(SP)               // Start Y value of bitmap
+00001382  2F3C 00000280            374      move.l      #BG_WIDTH, -(SP)        // Width of chunk
+00001388  2F3C 000001E0            375      move.l      #BG_HEIGHT, -(SP)       // Height of chunk
+0000138E  2F3C 00000000            376      move.l      #0, -(SP)               // X position on screen
+00001394  2F3C 00000000            377      move.l      #0, -(SP)               // Y position on screen
+0000139A  4EB8 12C8                378      JSR         RENDER_BACKGROUND_CHUNK
+0000139E  7018                     379      move.l      #SIX_ARGS, D0
+000013A0  DFC0                     380      add.l       D0, SP
+000013A2                           381      
+000013A2  4CDF 7FFF                382      movem.l     (SP)+, ALL_REG
+000013A6  4E75                     383      RTS
+000013A8                           384      
+000013A8                           385  ****************************************************
+000013A8                           386  *** Render player to screen in starting location ***
+000013A8                           387  ****************************************************
+000013A8                           388  RENDER_INITIAL_PLAYER_IMAGE:
+000013A8  48E7 FFFE                389      movem.l     ALL_REG, -(SP)
+000013AC                           390  
+000013AC  2F3C 00000000            391      move.l      #0, -(SP)
+000013B2  2F3C 00000000            392      move.l      #0, -(SP)
+000013B8  2F3C 00000020            393      move.l      #PLAYER_WIDTH, -(SP)
+000013BE  2F3C 00000020            394      move.l      #PLAYER_HEIGHT, -(SP)
+000013C4  2F39 000E3DD4            395      move.l      PLAYER_X_POSITION, -(SP)
+000013CA  2F3C 00000184            396      move.l      #PLAYER_Y_POSITION, -(SP)
+000013D0  4EB9 0000154C            397      JSR         RENDER_PLAYER_CHUNK
+000013D6  7018                     398      move.l      #SIX_ARGS, D0
+000013D8  DFC0                     399      add.l       D0, SP
+000013DA                           400      
+000013DA  4CDF 7FFF                401      movem.l     (SP)+, ALL_REG
+000013DE  4E75                     402      RTS
+000013E0                           403      
+000013E0                           404  ***************************************************
+000013E0                           405  *** Render enemy to screen in starting location ***
+000013E0                           406  ***************************************************
+000013E0                           407  RENDER_INITIAL_ENEMY_IMAGE:
+000013E0  48E7 FFFE                408      movem.l     ALL_REG, -(SP)
+000013E4                           409  
+000013E4  2F3C 00000000            410      move.l      #0, -(SP)
+000013EA  2F3C 00000000            411      move.l      #0, -(SP)
+000013F0  2F3C 00000020            412      move.l      #ENEMY_WIDTH, -(SP)
+000013F6  2F3C 00000020            413      move.l      #ENEMY_HEIGHT, -(SP)
+000013FC  2F3C 00000000            414      move.l      #0, -(SP)
+00001402  2F3C 00000000            415      move.l      #0, -(SP)
+00001408  4EB9 00001602            416      JSR         RENDER_ENEMY_CHUNK
+0000140E  7018                     417      move.l      #SIX_ARGS, D0
+00001410  DFC0                     418      add.l       D0, SP
+00001412                           419      
+00001412  4CDF 7FFF                420      movem.l     (SP)+, ALL_REG
+00001416  4E75                     421      RTS
+00001418                           422  
+00001418                           423  ****************************************************************************
+00001418                           424  *** Generates Player Image Data and stores it in global values           ***
+00001418                           425  ****************************************************************************
+00001418                           426  *** D6: Used for storing the number of bytes in the bitmap image         ***
+00001418                           427  *** D7: Used for storing temp data of all dimensional values in the file ***
+00001418                           428  ****************************************************************************
+00001418                           429  GENERATE_PLAYER_IMAGE_DATA:
+00001418                           430  
+00001418  4CEF 0100 0004           431      movem.l     ARG_1(SP), A0               // Take bitmap image from stack
+0000141E  2E39 000E3190            432      move.l      PlayerImageDataOffset, D7
+00001424  4EB8 1250                433      JSR         SWAP_LONG_IN_D7    
+00001428  D1C7                     434      adda.l      D7, A0                      // Offset A0 to start of image data
+0000142A  23C8 000E3DC4            435      move.l      A0, PlayerImageData
+00001430                           436  
+00001430                           437      *** After image height is determined, swap and store back in variable ***    
+00001430  2E39 000E319C            438      move.l      (PlayerHeightLocation), D7
+00001436  4EB8 1250                439      JSR         SWAP_LONG_IN_D7
+0000143A  23C7 000E3DBC            440      move.l      D7, PlayerImageHeight
+00001440                           441      
+00001440  2E39 000E3198            442      move.l      (PlayerWidthLocation), D7
+00001446  4EB8 1250                443      JSR         SWAP_LONG_IN_D7
+0000144A                           444      
+0000144A                           445      *** Move the number of unpadded bytes into D6 ***
+0000144A  2C07                     446      move.l      D7, D6
+0000144C  CCFC 0003                447      mulu        #BytesPerPixel, D6          // Multiply number of pixels by bytes per pixel
+00001450                           448      
+00001450                           449      *** Compute the number of bytes per row with padding in the image ***
+00001450  CEFC 0018                450      mulu        #BitsPerPixel, D7           // Computes number of bits within the pixel data
+00001454  0687 0000001F            451      addi.l      #31, D7                     // Adds just under one word to D7
+0000145A  EA8F                     452      lsr.l       #5, D7                      // D7 /= 32 with 31 padded will truncate remainder bits that aren't divisible by word length
+0000145C  E58F                     453      lsl.l       #2, D7                      // D7 *= 4 will adjust the value back to byte length (net division of 8 from pixel count)
+0000145E  23C7 000E3DC0            454      move.l      D7, PlayerImageWidth
+00001464                           455      
+00001464                           456      *** Compute the number of padded bytes at the end of a row ***
+00001464  9E86                     457      sub.l       D6, D7                      // Subtract unpadded row length from padded row length
+00001466  23C7 000E3DC8            458      move.l      D7, PlayerRowPadding        // Store the number of padded bytes
+0000146C                           459  
+0000146C  4E75                     460      RTS
+0000146E                           461      
+0000146E                           462  ****************************************************************************
+0000146E                           463  *** Generates Enemy Image Data and stores it in global values            ***
+0000146E                           464  ****************************************************************************
+0000146E                           465  *** D6: Used for storing the number of bytes in the bitmap image         ***
+0000146E                           466  *** D7: Used for storing temp data of all dimensional values in the file ***
+0000146E                           467  ****************************************************************************
+0000146E                           468  GENERATE_ENEMY_IMAGE_DATA:
+0000146E                           469  
+0000146E  4CEF 0100 0004           470      movem.l     ARG_1(SP), A0               // Take bitmap image from stack
+00001474  2E39 000E3DE2            471      move.l      EnemyImageDataOffset, D7
+0000147A  4EB8 1250                472      JSR         SWAP_LONG_IN_D7    
+0000147E  D1C7                     473      adda.l      D7, A0                      // Offset A0 to start of image data
+00001480  23C8 000E4A16            474      move.l      A0, EnemyImageData
+00001486                           475  
+00001486                           476      *** After image height is determined, swap and store back in variable ***    
+00001486  2E39 000E3DEE            477      move.l      (EnemyHeightLocation), D7
+0000148C  4EB8 1250                478      JSR         SWAP_LONG_IN_D7
+00001490  23C7 000E4A0E            479      move.l      D7, EnemyImageHeight
+00001496                           480      
+00001496  2E39 000E3DEA            481      move.l      (EnemyWidthLocation), D7
+0000149C  4EB8 1250                482      JSR         SWAP_LONG_IN_D7
+000014A0                           483      
+000014A0                           484      *** Move the number of unpadded bytes into D6 ***
+000014A0  2C07                     485      move.l      D7, D6
+000014A2  CCFC 0003                486      mulu        #BytesPerPixel, D6          // Multiply number of pixels by bytes per pixel
+000014A6                           487      
+000014A6                           488      *** Compute the number of bytes per row with padding in the image ***
+000014A6  CEFC 0018                489      mulu        #BitsPerPixel, D7           // Computes number of bits within the pixel data
+000014AA  0687 0000001F            490      addi.l      #31, D7                     // Adds just under one word to D7
+000014B0  EA8F                     491      lsr.l       #5, D7                      // D7 /= 32 with 31 padded will truncate remainder bits that aren't divisible by word length
+000014B2  E58F                     492      lsl.l       #2, D7                      // D7 *= 4 will adjust the value back to byte length (net division of 8 from pixel count)
+000014B4  23C7 000E4A12            493      move.l      D7, EnemyImageWidth
+000014BA                           494      
+000014BA                           495      *** Compute the number of padded bytes at the end of a row ***
+000014BA  9E86                     496      sub.l       D6, D7                      // Subtract unpadded row length from padded row length
+000014BC  23C7 000E4A1A            497      move.l      D7, EnemyRowPadding         // Store the number of padded bytes
+000014C2                           498  
+000014C2  4E75                     499      RTS
+000014C4                           500      
+000014C4                           501  *******************************************************************
+000014C4                           502  *** Renders background image chunk over current player location ***
+000014C4                           503  *******************************************************************
+000014C4                           504  CLEAR_PLAYER_IMAGE:
+000014C4  48E7 FFFE                505      movem.l     ALL_REG, -(SP)
+000014C8                           506      
+000014C8  243C 00000184            507      move.l      #PLAYER_Y_POSITION, D2
+000014CE                           508      
+000014CE  2839 000E3DD4            509      move.l      PLAYER_X_POSITION, D4
+000014D4  E084                     510      asr.l       #8, D4                  // Shift off fractional bits of player position
+000014D6                           511      
+000014D6  2639 000E316E            512      move.l      BackgroundImageHeight, D3
+000014DC  9682                     513      sub.l       D2, D3                  // Subtract player y value from height of image
+000014DE  0483 00000020            514      sub.l       #PLAYER_HEIGHT, D3      // Subtract player height from image height
+000014E4  2F04                     515      move.l      D4, -(SP)               // Pass player x with fractional bits adjusted off
+000014E6  2F03                     516      move.l      D3, -(SP)
+000014E8  2F3C 00000020            517      move.l      #PLAYER_WIDTH, -(SP)    // Chunk size of player width
+000014EE  2F3C 00000020            518      move.l      #PLAYER_HEIGHT, -(SP)   // Chunk size of player height
+000014F4                           519      
+000014F4                           520      
+000014F4  2F04                     521      move.l      D4, -(SP)               // Pass player x with fractional bits adjusted off
+000014F6  2F3C 00000184            522      move.l      #PLAYER_Y_POSITION, -(SP)               // Player y
+000014FC  4EB8 12C8                523      JSR         RENDER_BACKGROUND_CHUNK
+00001500  7018                     524      move.l      #SIX_ARGS, D0
+00001502  DFC0                     525      add.l       D0, SP
+00001504                           526      
+00001504  4CDF 7FFF                527      movem.l     (SP)+, ALL_REG
+00001508  4E75                     528      RTS
+0000150A                           529      
+0000150A                           530  ******************************************************************
+0000150A                           531  *** Renders background image chunk over current enemy location ***
+0000150A                           532  ******************************************************************
+0000150A                           533  CLEAR_ENEMY_IMAGE:
+0000150A  48E7 FFFE                534      movem.l     ALL_REG, -(SP)
+0000150E                           535      
+0000150E  2439 000E4A2A            536      move.l      ENEMY_Y_POS, D2
+00001514  E082                     537      asr.l       #8, D2                  // Shift off fractional bits
+00001516                           538      
+00001516  2839 000E4A26            539      move.l      ENEMY_X_POS, D4
+0000151C                           540      
+0000151C  2639 000E316E            541      move.l      BackgroundImageHeight, D3
+00001522  9682                     542      sub.l       D2, D3                  // Subtract player y value from height of image
+00001524  0483 00000020            543      sub.l       #ENEMY_HEIGHT, D3       // Subtract enemy height from image height
+0000152A  2F04                     544      move.l      D4, -(SP)               // Pass enemy x
+0000152C  2F03                     545      move.l      D3, -(SP)
+0000152E  2F3C 00000020            546      move.l      #ENEMY_WIDTH, -(SP)     // Chunk size of enemy width
+00001534  2F3C 00000020            547      move.l      #ENEMY_HEIGHT, -(SP)    // Chunk size of enemy height
+0000153A                           548      
+0000153A                           549      
+0000153A  2F04                     550      move.l      D4, -(SP)               // Pass enemy x 
+0000153C  2F02                     551      move.l      D2, -(SP)               // Enemy y with fractioanl bits shifted off
+0000153E  4EB8 12C8                552      JSR         RENDER_BACKGROUND_CHUNK
+00001542  7018                     553      move.l      #SIX_ARGS, D0
+00001544  DFC0                     554      add.l       D0, SP
+00001546                           555      
+00001546  4CDF 7FFF                556      movem.l     (SP)+, ALL_REG
+0000154A  4E75                     557      RTS
+0000154C                           558  
+0000154C                           559      
+0000154C                           560  *************************************************************************
+0000154C                           561  *** Using stored player image data and location/dimension arguments,  ***
+0000154C                           562  *** renders a bitmap chunk to the screen                              ***
+0000154C                           563  *************************************************************************
+0000154C                           564  *** D1: x position on screen                                          ***
+0000154C                           565  *** D2: y position on screen                                          ***
+0000154C                           566  *** D4: x chunk start in player image                                 ***
+0000154C                           567  *** D5: y chunk start in player image                                 ***
+0000154C                           568  *** PlayerChunkWidth: width of all chunks rendered from this image    ***
+0000154C                           569  *** PlayerChunkHeight: height of all chunks rendered from this image  ***
+0000154C                           570  *************************************************************************
+0000154C                           571  RENDER_PLAYER_CHUNK:
+0000154C  48E7 FFFE                572      movem.l     ALL_REG,-(SP)                                  
+00001550  DFFC 0000003C            573      adda.l      #ALL_REG_BYTE_SIZE, SP             
+00001556                           574  
+00001556                           575      *** Handle passed arguments ***    
+00001556  242F 0004                576      move.l      ARG_1(SP), D2                       // Pull rendering y position from stack
+0000155A  222F 0008                577      move.l      ARG_2(SP), D1                       // Pull rendering x position from stack
+0000155E  23EF 000C 000E3DD0       578      move.l      ARG_3(SP), PlayerChunkHeight        // Store rendering height
+00001566  23EF 0010 000E3DCC       579      move.l      ARG_4(SP), PlayerChunkWidth         // Store rendering width
+0000156E  2A2F 0014                580      move.l      ARG_5(SP), D5                       // Pull bitmap y position from stack
+00001572  282F 0018                581      move.l      ARG_6(SP), D4                       // Pull bitmap x position from stack
+00001576                           582      
+00001576  2079 000E3DC4            583      move.l      PlayerImageData, A0
+0000157C                           584      
+0000157C                           585      *** Add chunk height to D2 to invert rendering ***
+0000157C  2C39 000E3DD0            586      move.l      PlayerChunkHeight, D6               // Store chunk height temporarily
+00001582  D486                     587      add.l       D6, D2                              // Offset pen y to end of image
+00001584                           588      
+00001584                           589      *** Offset to rendering position of bitmap data ***
+00001584  2E39 000E3DC0            590      move.l      PlayerImageWidth, D7
+0000158A  CEC5                     591      mulu.w      D5, D7
+0000158C                           592      
+0000158C  DE84                     593      add.l       D4, D7
+0000158E  DE84                     594      add.l       D4, D7
+00001590  DE84                     595      add.l       D4, D7    
+00001592                           596      
+00001592  D1C7                     597      adda.l      D7, A0
+00001594                           598  
+00001594                           599      *** Initialize rendering loop ***
+00001594  7E00                     600      move.l      #0, D7                              // Initialize D7 as column counter
+00001596  7600                     601      move.l      #0, D3                              // Initialize D3 as row counter
+00001598                           602  ITERATE_OVER_PLAYER_CHUNK:
+00001598                           603      *** TODO: Handle rendering ***
+00001598  2C01                     604      move.l      D1, D6                              // Temporary move pen x to D6 while setting pen color
+0000159A                           605      
+0000159A                           606      *** Move next color to D1 ***
+0000159A  4241                     607      clr         D1
+0000159C  1218                     608      move.b      (A0)+, D1
+0000159E  E189                     609      lsl.l       #8, D1
+000015A0  1218                     610      move.b      (A0)+, D1
+000015A2  E189                     611      lsl.l       #8, D1
+000015A4  1218                     612      move.b      (A0)+, D1
+000015A6                           613      
+000015A6  7050                     614      move.l      #SET_PEN_COLOR_COMMAND, D0
+000015A8  4E4F                     615      trap        #15
+000015AA                           616      
+000015AA                           617      *** Draw pixel ***
+000015AA  B2BC 00FF00FF            618      cmp.l       #$FF00FF, D1
+000015B0  6700 0008                619      beq         DISREGARD_PLAYER_PIXEL
+000015B4                           620      
+000015B4  2206                     621      move.l      D6, D1                              // Move pen x back to D1
+000015B6  7052                     622      move.l      #DRAW_PIXEL_COMMAND, D0
+000015B8  4E4F                     623      trap        #15
+000015BA                           624  DISREGARD_PLAYER_PIXEL:
+000015BA  2206                     625      move.l      D6, D1                              // Move pen x back to D1    
+000015BC  5281                     626      addi.l      #1, D1                              // Offset pen x to the right by one
+000015BE  5287                     627      addi.l      #1, D7                              // Add 1 to column counter
+000015C0                           628      
+000015C0  2C39 000E3DCC            629      move.l      PlayerChunkWidth, D6                // Move chunk width to D6 for comparisons
+000015C6  BC87                     630      cmp.l       D7, D6
+000015C8  6ECE                     631      bgt         ITERATE_OVER_PLAYER_CHUNK
+000015CA                           632      
+000015CA                           633  MOVE_TO_NEXT_LINE_PLAYER_IMAGE:
+000015CA  5382                     634      sub.l       #1, D2                              // Move pen up 1 value
+000015CC  5283                     635      addi.l      #1, D3                              // Increment y counter
+000015CE                           636      
+000015CE  2C39 000E3DCC            637      move.l      PlayerChunkWidth, D6
+000015D4  9286                     638      sub.l       D6, D1                              // Move pen x back to origin
+000015D6                           639      
+000015D6                           640      *** Store remaining row bytes in D6 ***
+000015D6  2C39 000E3DC0            641      move.l      PlayerImageWidth, D6                // Load Image width
+000015DC  2E39 000E3DCC            642      move.l      PlayerChunkWidth, D7                
+000015E2  CEFC 0003                643      mulu.w      #BytesPerPixel, D7                  // Convert pixels to bytes
+000015E6  9C87                     644      sub.l       D7, D6                              // Subtract chunk start pos
+000015E8  D1C6                     645      add.l       D6, A0                              // Offset to end of row
+000015EA                           646      
+000015EA  7E00                     647      move.l      #0, D7                              // Reset column counter
+000015EC                           648      
+000015EC  2C39 000E3DD0            649      move.l      PlayerChunkHeight, D6               // Move chunk height to d6 for comparisons
+000015F2  BC83                     650      cmp.l       D3, D6
+000015F4  6EA2                     651      bgt         ITERATE_OVER_PLAYER_CHUNK
+000015F6                           652      
+000015F6  9FFC 0000003C            653      suba.l      #ALL_REG_BYTE_SIZE, SP           
+000015FC  4CDF 7FFF                654      movem.l     (SP)+, ALL_REG                   
+00001600  4E75                     655      RTS
+00001602                           656      
+00001602                           657  *************************************************************************
+00001602                           658  *** Using stored enemy image data and location/dimension arguments,   ***
+00001602                           659  *** renders a bitmap chunk to the screen                              ***
+00001602                           660  *************************************************************************
+00001602                           661  *** D1: x position on screen                                          ***
+00001602                           662  *** D2: y position on screen                                          ***
+00001602                           663  *** D4: x chunk start in enemy image                                  ***
+00001602                           664  *** D5: y chunk start in enemy image                                  ***
+00001602                           665  *** EnemyChunkWidth: width of all chunks rendered from this image     ***
+00001602                           666  *** EnemyChunkHeight: height of all chunks rendered from this image   ***
+00001602                           667  *************************************************************************
+00001602                           668  RENDER_ENEMY_CHUNK:
+00001602  48E7 FFFE                669      movem.l     ALL_REG,-(SP)                                  
+00001606  DFFC 0000003C            670      adda.l      #ALL_REG_BYTE_SIZE, SP             
+0000160C                           671  
+0000160C                           672      *** Handle passed arguments ***    
+0000160C  242F 0004                673      move.l      ARG_1(SP), D2                       // Pull rendering y position from stack
+00001610  222F 0008                674      move.l      ARG_2(SP), D1                       // Pull rendering x position from stack
+00001614  23EF 000C 000E4A22       675      move.l      ARG_3(SP), EnemyChunkHeight         // Store rendering height
+0000161C  23EF 0010 000E4A1E       676      move.l      ARG_4(SP), EnemyChunkWidth          // Store rendering width
+00001624  2A2F 0014                677      move.l      ARG_5(SP), D5                       // Pull bitmap y position from stack
+00001628  282F 0018                678      move.l      ARG_6(SP), D4                       // Pull bitmap x position from stack
+0000162C                           679      
+0000162C  2079 000E4A16            680      move.l      EnemyImageData, A0
+00001632                           681      
+00001632                           682      *** Add chunk height to D2 to invert rendering ***
+00001632  2C39 000E4A22            683      move.l      EnemyChunkHeight, D6                // Store chunk height temporarily
+00001638  D486                     684      add.l       D6, D2                              // Offset pen y to end of image
+0000163A                           685      
+0000163A                           686      *** Offset to rendering position of bitmap data ***
+0000163A  2E39 000E4A12            687      move.l      EnemyImageWidth, D7
+00001640  CEC5                     688      mulu.w      D5, D7
+00001642                           689      
+00001642  DE84                     690      add.l       D4, D7
+00001644  DE84                     691      add.l       D4, D7
+00001646  DE84                     692      add.l       D4, D7    
+00001648                           693      
+00001648  D1C7                     694      adda.l      D7, A0
+0000164A                           695  
+0000164A                           696      *** Initialize rendering loop ***
+0000164A  7E00                     697      move.l      #0, D7                              // Initialize D7 as column counter
+0000164C  7600                     698      move.l      #0, D3                              // Initialize D3 as row counter
+0000164E                           699  ITERATE_OVER_ENEMY_CHUNK:
+0000164E                           700      *** TODO: Handle rendering ***
+0000164E  2C01                     701      move.l      D1, D6                              // Temporary move pen x to D6 while setting pen color
+00001650                           702      
+00001650                           703      *** Move next color to D1 ***
+00001650  4241                     704      clr         D1
+00001652  1218                     705      move.b      (A0)+, D1
+00001654  E189                     706      lsl.l       #8, D1
+00001656  1218                     707      move.b      (A0)+, D1
+00001658  E189                     708      lsl.l       #8, D1
+0000165A  1218                     709      move.b      (A0)+, D1
+0000165C                           710      
+0000165C                           711      *** Draw pixel ***    
+0000165C  B2BC 00FF00FF            712      cmp.l       #$FF00FF, D1
+00001662  6700 000C                713      beq         DISREGARD_ENEMY_PIXEL
+00001666                           714      
+00001666  7050                     715      move.l      #SET_PEN_COLOR_COMMAND, D0
+00001668  4E4F                     716      trap        #15
+0000166A                           717      
+0000166A  2206                     718      move.l      D6, D1
+0000166C                           719      
+0000166C  7052                     720      move.l      #DRAW_PIXEL_COMMAND, D0
+0000166E  4E4F                     721      trap        #15
+00001670                           722      
+00001670                           723  DISREGARD_ENEMY_PIXEL:
+00001670  2206                     724      move.l      D6, D1                              // Move pen x back to D1
+00001672  5281                     725      addi.l      #1, D1                              // Offset pen x to the right by one
+00001674  5287                     726      addi.l      #1, D7                              // Add 1 to column counter
+00001676                           727      
+00001676  2C39 000E4A1E            728      move.l      EnemyChunkWidth, D6                 // Move chunk width to D6 for comparisons
+0000167C  BC87                     729      cmp.l       D7, D6
+0000167E  6ECE                     730      bgt         ITERATE_OVER_ENEMY_CHUNK
+00001680                           731      
+00001680                           732  MOVE_TO_NEXT_LINE_ENEMY_IMAGE:
+00001680  5382                     733      sub.l       #1, D2                              // Move pen up 1 value
+00001682  5283                     734      addi.l      #1, D3                              // Increment y counter
+00001684                           735      
+00001684  2C39 000E4A1E            736      move.l      EnemyChunkWidth, D6
+0000168A  9286                     737      sub.l       D6, D1                              // Move pen x back to origin
+0000168C                           738      
+0000168C                           739      *** Store remaining row bytes in D6 ***
+0000168C  2C39 000E4A12            740      move.l      EnemyImageWidth, D6                 // Load Image width
+00001692  2E39 000E4A1E            741      move.l      EnemyChunkWidth, D7                
+00001698  CEFC 0003                742      mulu.w      #BytesPerPixel, D7                  // Convert pixels to bytes
+0000169C  9C87                     743      sub.l       D7, D6                              // Subtract chunk start pos
+0000169E  D1C6                     744      add.l       D6, A0                              // Offset to end of row
+000016A0                           745      
+000016A0  7E00                     746      move.l      #0, D7                              // Reset column counter
+000016A2                           747      
+000016A2  2C39 000E4A22            748      move.l      EnemyChunkHeight, D6                // Move chunk height to d6 for comparisons
+000016A8  BC83                     749      cmp.l       D3, D6
+000016AA  6EA2                     750      bgt         ITERATE_OVER_ENEMY_CHUNK
+000016AC                           751      
+000016AC  9FFC 0000003C            752      suba.l      #ALL_REG_BYTE_SIZE, SP           
+000016B2  4CDF 7FFF                753      movem.l     (SP)+, ALL_REG                   
+000016B6  4E75                     754      RTS
+000016B8                           755      
+000016B8                           756  ****************************************
+000016B8                           757  *** Determines player movement speed ***
+000016B8                           758  ****************************************
+000016B8                           759  *** D0: Reserved for trap tasks      ***
+000016B8                           760  *** D1: Player input value           ***
+000016B8                           761  ****************************************
+000016B8                           762  UPDATE_PLAYER_INPUT:
+000016B8  48E7 8000                763      movem.l     D0, -(SP)                          
+000016BC  48E7 4000                764      movem.l     D1, -(SP)                          
+000016C0  48E7 2000                765      movem.l     D2, -(SP)                          
+000016C4                           766      
+000016C4                           767      *** Check player input and set velocity values ***
+000016C4  103C 0013                768      MOVE.B      #LISTEN_FOR_INPUTS, D0
+000016C8  7220                     769      move.l      #SPACE_KEY, D1
+000016CA  E189                     770      lsl.l       #8, D1    
+000016CC  123C 0041                771      move.b      #'A', D1
+000016D0  E189                     772      lsl.l       #8, D1
+000016D2  123C 0044                773      move.b      #'D', D1
+000016D6  4E4F                     774      TRAP        #15
+000016D8                           775      
+000016D8  0281 00FFFFFF            776      andi.l      #$FFFFFF, D1
+000016DE  6700 00C6                777      beq         NO_INPUT
+000016E2                           778      
+000016E2  203C 000E4A5A            779      move.l      #HAVE_HAD_NO_INPUT, D0
+000016E8  6700 00DA                780      beq         BYPASS_NO_INPUT
+000016EC  23FC 00000000 000E4A5A   781      move.l      #0, HAVE_HAD_NO_INPUT
+000016F6                           782      
+000016F6                           783      *** Check if D key pressed ***
+000016F6  B23C 00FF                784      cmp.b       #$FF, D1
+000016FA  6700 0010                785      beq         SET_D_PRESSED
+000016FE  23FC 00000000 000E4A4A   786      move.l      #0, D_PRESSED
+00001708  6000 000C                787      bra         BYPASS_D_PRESSED
+0000170C                           788  SET_D_PRESSED:
+0000170C  23FC 00000001 000E4A4A   789      move.l      #1, D_PRESSED
+00001716                           790  BYPASS_D_PRESSED:
+00001716                           791  
+00001716                           792      *** Check if A key pressed ***
+00001716  E089                     793      lsr.l       #8, D1
+00001718  B23C 00FF                794      cmp.b       #$FF, D1
+0000171C  6700 0010                795      beq         SET_A_PRESSED
+00001720  23FC 00000000 000E4A42   796      move.l      #0, A_PRESSED
+0000172A  6000 000C                797      bra         BYPASS_A_PRESSED
+0000172E                           798  SET_A_PRESSED:
+0000172E  23FC 00000001 000E4A42   799      move.l      #1, A_PRESSED
+00001738                           800  BYPASS_A_PRESSED:
+00001738                           801      
+00001738                           802      *** Check if space key pressed ***
+00001738  E089                     803      LSR.L       #8, D1
+0000173A  B23C 00FF                804      cmp.b       #$FF, D1
+0000173E  6700 0010                805      beq         SET_SPACE_PRESSED
+00001742  23FC 00000000 000E4A4E   806      move.l      #0, SPACE_PRESSED
+0000174C  6000 0054                807      bra         BYPASS_SPACE_PRESSED
+00001750                           808  SET_SPACE_PRESSED:
+00001750  23FC 00000001 000E4A4E   809      move.l      #1, SPACE_PRESSED
+0000175A  2439 000E4A3A            810      move.l      PROJECTILE_FIRED, D2
+00001760  B4BC 00000000            811      cmp.l       #0, D2
+00001766  6600 003A                812      bne         DONT_FIRE_NEW_PROJECTILE
+0000176A                           813      *** If no projectile exists, fire projectile at player x/y pos ***
+0000176A  2439 000E3DD4            814      move.l      PLAYER_X_POSITION, D2
+00001770  E082                     815      asr.l       #8, D2                      // Shift off fractional bits of xPos
+00001772  0682 0000000E            816      add.l       #PROJECTILE_POS_OFFSET, D2
+00001778  23C2 000E4A32            817      move.l      D2, PROJECTILE_X_POS
+0000177E  243C 00000184            818      move.l      #PLAYER_Y_POSITION, D2
+00001784  23C2 000E4A36            819      move.l      D2, PROJECTILE_Y_POS
+0000178A  23FC 00000001 000E4A3A   820      move.l      #1, PROJECTILE_FIRED
+00001794                           821      
+00001794  43F9 000E4AAF            822      lea         BulletFiredSound, A1
+0000179A  203C 00000049            823      move.l      #PLAY_SOUND_TRAP_TASK, D0
+000017A0  4E4F                     824      trap        #15
+000017A2                           825  DONT_FIRE_NEW_PROJECTILE:
+000017A2                           826      
+000017A2                           827  BYPASS_SPACE_PRESSED:
+000017A2                           828      
+000017A2  6000 0020                829      bra         BYPASS_NO_INPUT
+000017A6                           830      
+000017A6                           831  NO_INPUT:
+000017A6  23FC 00000001 000E4A5A   832      move.l      #1, HAVE_HAD_NO_INPUT
+000017B0  23FC 00000000 000E4A42   833      move.l      #0, A_PRESSED
+000017BA  23FC 00000000 000E4A4A   834      move.l      #0, D_PRESSED
+000017C4                           835  BYPASS_NO_INPUT:
+000017C4                           836      
+000017C4  4CDF 0004                837      movem.l     (SP)+, D2                        
+000017C8  4CDF 0002                838      movem.l     (SP)+, D1                        
+000017CC  4CDF 0001                839      movem.l     (SP)+, D0                        
+000017D0  4E75                     840      RTS
+000017D2                           841  
+000017D2                           842  *************************************************************************************************************
+000017D2                           843  *** De-renders old projectile data by drawing that segment of the background over the old projectile data ***
+000017D2                           844  *************************************************************************************************************
+000017D2                           845  RENDER_BG_OVER_PROJECTILE:
+000017D2  48E7 FFFE                846      movem.l     ALL_REG, -(SP)     
+000017D6                           847  
+000017D6  2039 000E4A3A            848      move.l      PROJECTILE_FIRED, D0
+000017DC  B0BC 00000000            849      cmp.l       #0, D0
+000017E2  6700 0042                850      beq         BYPASS_RENDER_OVER_PROJECTILE                   
+000017E6                           851  
+000017E6  2239 000E4A32            852      move.l      PROJECTILE_X_POS, D1
+000017EC  2439 000E316E            853      move.l      BackgroundImageHeight, D2
+000017F2  94B9 000E4A36            854      sub.l       PROJECTILE_Y_POS, D2
+000017F8  0482 00000014            855      sub.l       #PROJECTILE_LENGTH, D2
+000017FE  7601                     856      move.l      #1, D3
+00001800  283C 00000014            857      move.l      #PROJECTILE_LENGTH, D4
+00001806  2A39 000E4A32            858      move.l      PROJECTILE_X_POS, D5
+0000180C  2C39 000E4A36            859      move.l      PROJECTILE_Y_POS, D6
+00001812                           860      
+00001812  2F01                     861      move.l      D1, -(SP)
+00001814  2F02                     862      move.l      D2, -(SP)
+00001816  2F03                     863      move.l      D3, -(SP)
+00001818  2F04                     864      move.l      D4, -(SP)
+0000181A  2F05                     865      move.l      D5, -(SP)
+0000181C  2F06                     866      move.l      D6, -(SP)
+0000181E  4EB8 12C8                867      JSR         RENDER_BACKGROUND_CHUNK
+00001822  7018                     868      move.l      #SIX_ARGS, D0
+00001824  DFC0                     869      add.l       D0, SP
+00001826                           870  BYPASS_RENDER_OVER_PROJECTILE:
+00001826                           871  
+00001826  4CDF 7FFF                872      movem.l     (SP)+, ALL_REG                       
+0000182A  4E75                     873      RTS
+0000182C                           874      
+0000182C                           875  ********************************************************************************
+0000182C                           876  *** Renders projectile on screen in current position if projectile is active ***
+0000182C                           877  ********************************************************************************
+0000182C                           878  RENDER_PROJECTILE:
+0000182C  48E7 FFFE                879      movem.l     ALL_REG, -(SP)                        
+00001830                           880  
+00001830  2E39 000E4A3A            881      move.l      PROJECTILE_FIRED, D7
+00001836  BEBC 00000001            882      cmp.l       #1, D7
+0000183C  6600 002A                883      bne         IGNORE_RENDER_PROJECTILE
+00001840                           884      
+00001840  7050                     885      move.l      #SET_PEN_COLOR_COMMAND, D0
+00001842  223C 00FFFFFF            886      move.l      #$FFFFFF, D1
+00001848  4E4F                     887      trap        #15
+0000184A                           888  
+0000184A  2239 000E4A32            889      move.l      PROJECTILE_X_POS, D1
+00001850  2439 000E4A36            890      move.l      PROJECTILE_Y_POS, D2
+00001856  2601                     891      move.l      D1, D3
+00001858  2802                     892      move.l      D2, D4
+0000185A  0684 00000014            893      add.l       #PROJECTILE_LENGTH, D4
+00001860                           894      
+00001860  203C 00000054            895      move.l      #DRAW_LINE_TRAP_TASK, D0
+00001866  4E4F                     896      trap        #15
+00001868                           897      *move.l      #0, SPACE_PRESSED
+00001868                           898  IGNORE_RENDER_PROJECTILE:
+00001868                           899  
+00001868  4CDF 7FFF                900      movem.l     (SP)+, ALL_REG                       
+0000186C  4E75                     901      RTS
+0000186E                           902      
+0000186E                           903  **************************************************************************************************
+0000186E                           904  *** Moves the projectile towards the top of the screen and despawns it when it reaches the top ***
+0000186E                           905  **************************************************************************************************
+0000186E                           906  UPDATE_PROJECTILE:
+0000186E  48E7 FFFE                907      movem.l     ALL_REG, -(SP)                    
+00001872                           908  
+00001872  2039 000E4A3A            909      move.l      PROJECTILE_FIRED, D0
+00001878  B0BC 00000001            910      cmp.l       #1, D0
+0000187E  6600 007A                911      bne         DISREGARD_PROJECTILE_UPDATE
+00001882                           912  
+00001882  2239 000E4A32            913      move.l      PROJECTILE_X_POS, D1
+00001888  2439 000E4A36            914      move.l      PROJECTILE_Y_POS, D2
+0000188E  0482 00000009            915      sub.l       #PROJECTILE_SPEED, D2       // Subtract speed because projectile moves up
+00001894                           916      
+00001894  B4BC FFFFFFEC            917      cmp.l       #(0-PROJECTILE_LENGTH), D2
+0000189A  6D00 0028                918      blt         DESPAWN_PROJECTILE
+0000189E                           919      
+0000189E                           920      *** Test code handle collisions within update ***
+0000189E  4EB9 00001900            921      JSR         HANDLE_PROJECTILE_COLLISION
+000018A4  2039 000E4A3A            922      move.l      PROJECTILE_FIRED, D0
+000018AA  B0BC 00000001            923      cmp.l       #1, D0
+000018B0  6600 0012                924      bne         DESPAWN_PROJECTILE
+000018B4                           925      
+000018B4  23C1 000E4A32            926      move.l      D1, PROJECTILE_X_POS
+000018BA  23C2 000E4A36            927      move.l      D2, PROJECTILE_Y_POS
+000018C0  6000 0038                928      bra         DISREGARD_PROJECTILE_UPDATE
+000018C4                           929      
+000018C4                           930  DESPAWN_PROJECTILE:
+000018C4  23FC 00000000 000E4A3A   931      move.l      #0, PROJECTILE_FIRED
+000018CE                           932      
+000018CE  2F39 000E4A32            933      move.l      PROJECTILE_X_POS, -(SP)
+000018D4  2F3C 00000000            934      move.l      #0, -(SP)
+000018DA  2F3C 00000002            935      move.l      #2, -(SP)
+000018E0  2F3C 00000002            936      move.l      #2, -(SP)
+000018E6  2F39 000E4A32            937      move.l      PROJECTILE_X_POS, -(SP)
+000018EC  2F39 000E4A36            938      move.l      PROJECTILE_Y_POS, -(SP)
+000018F2  4EB8 12C8                939      JSR         RENDER_BACKGROUND_CHUNK
+000018F6  7018                     940      move.l      #SIX_ARGS, D0
+000018F8  DFC0                     941      add.l       D0, SP
+000018FA                           942      
+000018FA                           943  DISREGARD_PROJECTILE_UPDATE:
+000018FA                           944      
+000018FA  4CDF 7FFF                945      movem.l     (SP)+, ALL_REG                   
+000018FE  4E75                     946      RTS
+00001900                           947      
+00001900                           948  ********************************************************************************
+00001900                           949  *** Despawns projectile and respawns enemy with explosion sound if colliding ***
+00001900                           950  ********************************************************************************
+00001900                           951  HANDLE_PROJECTILE_COLLISION:
+00001900  48E7 FFFE                952      movem.l     ALL_REG, -(SP)
+00001904                           953      
+00001904                           954      *** Only assert collisions if projectile is on the screen ***
+00001904  2239 000E4A3A            955      move.l      PROJECTILE_FIRED, D1
+0000190A  B2BC 00000001            956      cmp.l       #1, D1
+00001910  6600 007A                957      bne         DO_NOT_COLLIDE
+00001914                           958      
+00001914  2239 000E4A32            959      move.l      PROJECTILE_X_POS, D1            // Store projectile x
+0000191A  2439 000E4A36            960      move.l      PROJECTILE_Y_POS, D2            // Store projectile y
+00001920  2639 000E4A26            961      move.l      ENEMY_X_POS, D3                 // Store enemy left bound
+00001926  2839 000E4A2A            962      move.l      ENEMY_Y_POS, D4                 // Store enemy upper bound
+0000192C  E084                     963      asr.l       #8, D4                          // Shift off fractional bits
+0000192E  2A39 000E4A26            964      move.l      ENEMY_X_POS, D5                 
+00001934  0685 00000020            965      add.l       #ENEMY_WIDTH, D5                // Store enemy right bound
+0000193A  2C39 000E4A2A            966      move.l      ENEMY_Y_POS, D6        
+00001940  E086                     967      asr.l       #8, D6                          // Shift off fractional bits
+00001942  0686 00000020            968      add.l       #ENEMY_HEIGHT, D6               // Store enemy lower bound
+00001948                           969  ASSERT_PROJECTILE_ABOVE_LOWER:
+00001948  BC82                     970      cmp.l       D2, D6
+0000194A  6D00 0040                971      blt         DO_NOT_COLLIDE
+0000194E                           972  ASSERT_PROJECTILE_BELOW_UPPER:
+0000194E  B882                     973      cmp.l       D2, D4
+00001950  6E00 003A                974      bgt         DO_NOT_COLLIDE
+00001954                           975  ASSERT_PROJECTILE_RIGHT_OF_LEFT:
+00001954  B681                     976      cmp.l       D1, D3
+00001956  6E00 0034                977      bgt         DO_NOT_COLLIDE
+0000195A                           978  ASSERT_PROJECTILE_LEFT_OF_RIGHT:
+0000195A  BA81                     979      cmp.l       D1, D5
+0000195C  6D00 002E                980      blt         DO_NOT_COLLIDE
+00001960                           981      
+00001960                           982      *** If all asserts are met, despawn bullet, respawn projectile and play explosion sound ***
+00001960  23FC 00000000 000E4A3A   983      move.l      #0, PROJECTILE_FIRED
+0000196A                           984      
+0000196A  4EB9 00001992            985      JSR         RESPAWN_ENEMY
+00001970  43F9 000E4ABF            986      lea         ExplosionSound, A1
+00001976  203C 00000049            987      move.l      #PLAY_SOUND_TRAP_TASK, D0
+0000197C  4E4F                     988      trap        #15
+0000197E                           989      
+0000197E                           990      *** Increment player score ***
+0000197E  2239 000E4A62            991      move.l      PLAYER_POINTS, D1
+00001984  5281                     992      add.l       #1, D1
+00001986  23C1 000E4A62            993      move.l      D1, PLAYER_POINTS
+0000198C                           994      
+0000198C                           995  DO_NOT_COLLIDE:
+0000198C  4CDF 7FFF                996      movem.l     (SP)+, ALL_REG
+00001990  4E75                     997      RTS
+00001992                           998      
+00001992                           999  ********************************************************************************************************
+00001992                          1000  *** Kills current enemy, respawns him at the top of the screen in a random xPos with increased speed ***
+00001992                          1001  ********************************************************************************************************
+00001992                          1002  RESPAWN_ENEMY:
+00001992  48E7 FFFE               1003      movem.l     ALL_REG, -(SP)
+00001996                          1004      
+00001996  4EB8 150A               1005      JSR         CLEAR_ENEMY_IMAGE
+0000199A                          1006      *move.l      ENEMY_X_POS, D1
+0000199A                          1007      *add.l       #10, D1
+0000199A                          1008      *move.l      D1, ENEMY_X_POS
+0000199A  4286                    1009      clr.l       D6
+0000199C  4EB9 0000203E           1010      JSR         getRandomLongIntoD6
+000019A2  E08E                    1011      lsr.l       #8, D6                  // Shift off lower bits to leave only word length value
+000019A4  E08E                    1012      lsr.l       #8, D6
+000019A6  2A3C 00000260           1013      move.l      #608, D5
+000019AC  8CC5                    1014      divu        D5, D6                  // Divide by screen width-enemy width
+000019AE  E08E                    1015      lsr.l       #8, D6                  // Shift off whole part to leave remainder
+000019B0  E08E                    1016      lsr.l       #8, D6
+000019B2  23C6 000E4A26           1017      move.l      D6, ENEMY_X_POS
+000019B8                          1018      
+000019B8  23FC 00000000 000E4A2A  1019      move.l      #0, ENEMY_Y_POS
+000019C2  06B9 0000007D 000E4A2E  1020      add.l       #ENEMY_SPEED_INCREMENT, ENEMY_SPEED  // Speed up enemy
+000019CC                          1021      
+000019CC  4CDF 7FFF               1022      movem.l     (SP)+, ALL_REG
+000019D0  4E75                    1023      RTS
+000019D2                          1024      
+000019D2                          1025  **********************************************************************************************
+000019D2                          1026  *** Updates enemy velocity based on constant speed                                         ***
+000019D2                          1027  **********************************************************************************************
+000019D2                          1028  *** D1: Stores the enemy xPos                                                              ***
+000019D2                          1029  *** D2: Stores the enemy yPos                                                              ***
+000019D2                          1030  *** D3: Stores the lower bound of the screen offset by enemy height                        ***
+000019D2                          1031  **********************************************************************************************
+000019D2                          1032  UPDATE_ENEMY_VALUES:                          
+000019D2  48E7 FFFE               1033      movem.l     ALL_REG, -(SP)          
+000019D6                          1034  
+000019D6  4EB8 150A               1035      JSR         CLEAR_ENEMY_IMAGE                      
+000019DA                          1036      
+000019DA  2239 000E4A26           1037      move.l      ENEMY_X_POS,  D1
+000019E0  2439 000E4A2A           1038      move.l      ENEMY_Y_POS,  D2
+000019E6                          1039      
+000019E6  D4B9 000E4A2E           1040      add.l       ENEMY_SPEED, D2
+000019EC  2802                    1041      move.l      D2, D4                      // Copy speed to preserve fractional bits
+000019EE  E082                    1042      asr.l       #8, D2                      // Shift off fractional bits
+000019F0  2639 000E316E           1043      move.l      BackgroundImageHeight, D3
+000019F6  0483 00000020           1044      sub.l       #ENEMY_HEIGHT, D3
+000019FC  B483                    1045      cmp.l       D3, D2
+000019FE  6E00 000C               1046      bgt         RESET_ENEMY_TO_TOP
+00001A02  23C4 000E4A2A           1047      move.l      D4, ENEMY_Y_POS
+00001A08  6000 0014               1048      bra         BYPASS_ENEMY_RESET
+00001A0C                          1049  RESET_ENEMY_TO_TOP:
+00001A0C  4EB8 1992               1050      JSR         RESPAWN_ENEMY
+00001A10  2239 000E4A26           1051      move.l      ENEMY_X_POS, D1
+00001A16  2439 000E4A2A           1052      move.l      ENEMY_Y_POS, D2
+00001A1C  7400                    1053      move.l      #0, D2
+00001A1E                          1054  BYPASS_ENEMY_RESET:
+00001A1E                          1055  
+00001A1E                          1056      *** Renders enemy to the buffer ***
+00001A1E  2F3C 00000000           1057      move.l      #0, -(SP)               
+00001A24  2F3C 00000000           1058      move.l      #0, -(SP)
+00001A2A  2F3C 00000020           1059      move.l      #ENEMY_WIDTH, -(SP)
+00001A30  2F3C 00000020           1060      move.l      #ENEMY_HEIGHT, -(SP)
+00001A36  2F01                    1061      move.l      D1, -(SP)
+00001A38  2F02                    1062      move.l      D2, -(SP)
+00001A3A  4EB8 1602               1063      JSR         RENDER_ENEMY_CHUNK
+00001A3E  7018                    1064      move.l      #SIX_ARGS, D0
+00001A40  DFC0                    1065      add.l       D0, SP
+00001A42                          1066  
+00001A42  4CDF 7FFF               1067      movem.l     (SP)+, ALL_REG                   
+00001A46  4E75                    1068      RTS
+00001A48                          1069      
+00001A48                          1070  **********************************************************************************************
+00001A48                          1071  *** Updates player velocity based on currently pressed keys                                ***
+00001A48                          1072  **********************************************************************************************
+00001A48                          1073  *** D5: stores the boolean values for individual key presses                               ***
+00001A48                          1074  *** D6: Stores the directional velocities which will be transferred to the player velocity ***
+00001A48                          1075  **********************************************************************************************
+00001A48                          1076  UPDATE_PLAYER_VALUES:
+00001A48  48E7 0400               1077      movem.l     D5, -(SP)                          
+00001A4C  48E7 0200               1078      movem.l     D6, -(SP)                               
+00001A50                          1079      
+00001A50  23FC 00000000 000E4A52  1080      move.l      #0, PLAYER_X_VEL
+00001A5A                          1081  CHECK_PLAYER_MOVING_LEFT:
+00001A5A  2A39 000E4A42           1082      move.l      A_PRESSED, D5
+00001A60  BABC 00000001           1083      cmp.l       #1, D5
+00001A66  6700 0006               1084      beq         SET_PLAYER_MOVING_LEFT
+00001A6A  6000 0012               1085      bra         CHECK_PLAYER_MOVING_RIGHT
+00001A6E                          1086  SET_PLAYER_MOVING_LEFT:
+00001A6E  2C3C FFFFF9C0           1087      move.l      #MOVING_LEFT, D6
+00001A74  23C6 000E4A52           1088      move.l      D6, PLAYER_X_VEL
+00001A7A  6000 0022               1089      bra         END_X_VEL_ASSERTIONS
+00001A7E                          1090  CHECK_PLAYER_MOVING_RIGHT:
+00001A7E  2A39 000E4A4A           1091      move.l      D_PRESSED, D5
+00001A84  BABC 00000001           1092      cmp.l       #1, D5
+00001A8A  6700 0006               1093      beq         SET_PLAYER_MOVING_RIGHT
+00001A8E  6000 000E               1094      bra         END_X_VEL_ASSERTIONS
+00001A92                          1095  SET_PLAYER_MOVING_RIGHT:
+00001A92  2C3C 00000640           1096      move.l      #MOVING_RIGHT, D6
+00001A98  23C6 000E4A52           1097      move.l      D6, PLAYER_X_VEL
+00001A9E                          1098  END_X_VEL_ASSERTIONS:
+00001A9E                          1099  
+00001A9E  4CDF 0040               1100      movem.l     (SP)+, D6                        
+00001AA2  4CDF 0020               1101      movem.l     (SP)+, D5                        
+00001AA6  4E75                    1102      RTS
+00001AA8                          1103      
+00001AA8                          1104  ********************************************************************************************************
+00001AA8                          1105  *** Takes player x,y in D1, D2, clamps them to screen bounds, and updates position in same registers ***
+00001AA8                          1106  ********************************************************************************************************
+00001AA8                          1107  UPDATE_PLAYER_POSITION:
+00001AA8  48E7 4000               1108      movem.l     D1, -(SP)
+00001AAC  48E7 2000               1109      movem.l     D2, -(SP)
+00001AB0                          1110  
+00001AB0  2239 000E3DD4           1111      move.l      PLAYER_X_POSITION, D1
+00001AB6  E081                    1112      asr.l       #8, D1                  // Shift off fractional bits
+00001AB8  243C 00000184           1113      move.l      #PLAYER_Y_POSITION, D2
+00001ABE                          1114  
+00001ABE  B2BC 00000000           1115      cmp.l       #0, D1
+00001AC4  6F00 0010               1116      ble         CLAMP_LOWER_X
+00001AC8  B2BC 00000260           1117      cmp.l       #(BG_WIDTH-PLAYER_WIDTH), D1
+00001ACE  6E00 0016               1118      bgt         CLAMP_UPPER_X
+00001AD2  6000 0022               1119      bra         DO_NOT_CLAMP_X
+00001AD6                          1120  CLAMP_LOWER_X:
+00001AD6  7200                    1121      move.l      #0, D1
+00001AD8  23FC 00000000 000E3DD4  1122      move.l      #0, PLAYER_X_POSITION
+00001AE2  6000 000A               1123      bra         END_X_CLAMP
+00001AE6                          1124  CLAMP_UPPER_X:
+00001AE6  223C 00000260           1125      move.l      #(BG_WIDTH-PLAYER_WIDTH), D1
+00001AEC  E181                    1126      asl.l       #8, D1                  // Shift fractional bits back after clamping
+00001AEE                          1127  END_X_CLAMP:
+00001AEE  23C1 000E3DD4           1128      move.l      D1, PLAYER_X_POSITION
+00001AF4  E081                    1129      asr.l       #8, D1
+00001AF6                          1130  DO_NOT_CLAMP_X:
+00001AF6                          1131  
+00001AF6                          1132      *** Renders player to the buffer ***
+00001AF6  2F3C 00000000           1133      move.l      #0, -(SP)               
+00001AFC  2F3C 00000000           1134      move.l      #0, -(SP)
+00001B02  2F3C 00000020           1135      move.l      #PLAYER_WIDTH, -(SP)
+00001B08  2F3C 00000020           1136      move.l      #PLAYER_HEIGHT, -(SP)
+00001B0E  2F01                    1137      move.l      D1, -(SP)
+00001B10  2F02                    1138      move.l      D2, -(SP)
+00001B12  4EB8 154C               1139      JSR         RENDER_PLAYER_CHUNK
+00001B16  7018                    1140      move.l      #SIX_ARGS, D0
+00001B18  DFC0                    1141      add.l       D0, SP
+00001B1A                          1142      
+00001B1A  4CDF 0004               1143      movem.l     (SP)+, D2
+00001B1E  4CDF 0002               1144      movem.l     (SP)+, D1
+00001B22  4E75                    1145      RTS
+00001B24                          1146      
+00001B24                          1147  ******************************************************************
+00001B24                          1148  *** If player is dead, game will restart when space is pressed ***
+00001B24                          1149  ******************************************************************
+00001B24                          1150  LISTEN_FOR_RESTART:
+00001B24  48E7 FFFE               1151      movem.l     ALL_REG, -(SP)
+00001B28                          1152      
+00001B28                          1153      *** Check player input and set velocity values ***
+00001B28  103C 0013               1154      MOVE.B      #LISTEN_FOR_INPUTS, D0
+00001B2C  223C 0000000D           1155      move.l      #ENTER_KEY, D1
+00001B32  4E4F                    1156      trap        #15
+00001B34                          1157      
+00001B34  B23C 00FF               1158      cmp.b       #$FF, D1
+00001B38  6700 0006               1159      beq         RESPAWN_PLAYER
+00001B3C  6000 000C               1160      bra         BYPASS_RESPAWN_PLAYER
+00001B40                          1161  RESPAWN_PLAYER:
+00001B40  23FC 00000001 000E4A5E  1162      move.l      #1, PLAYER_ALIVE
+00001B4A                          1163  BYPASS_RESPAWN_PLAYER:
+00001B4A                          1164      
+00001B4A  4CDF 7FFF               1165      movem.l     (SP)+, ALL_REG
+00001B4E  4E75                    1166      RTS
+00001B50                          1167  
+00001B50                          1168  ******************************************************************************
+00001B50                          1169  *** Determines if the player is colliding with the enemy and ends the game ***
+00001B50                          1170  ******************************************************************************    
+00001B50                          1171  HANDLE_PLAYER_COLLISION:
+00001B50  48E7 FFFE               1172      movem.l     ALL_REG, -(SP)
+00001B54                          1173      
+00001B54  2239 000E3DD4           1174      move.l      PLAYER_X_POSITION, D1           // Store player LEFT
+00001B5A  E081                    1175      asr.l       #8, D1                          // Shift off fractional bits
+00001B5C  243C 00000184           1176      move.l      #PLAYER_Y_POSITION, D2          // Store player TOP
+00001B62  2601                    1177      move.l      D1, D3                          // Store player RIGHT
+00001B64  0683 00000020           1178      add.l       #PLAYER_WIDTH, D3
+00001B6A  2839 000E4A26           1179      move.l      ENEMY_X_POS, D4                 // Store enemy LEFT
+00001B70  2A04                    1180      move.l      D4, D5                          // Store enemy RIGHT
+00001B72  0685 00000020           1181      add.l       #ENEMY_WIDTH, D5
+00001B78  2C39 000E4A2A           1182      move.l      ENEMY_Y_POS, D6                 // Store enemy TOP
+00001B7E  E086                    1183      asr.l       #8, D6                          // Shift off fractional bits
+00001B80  2E06                    1184      move.l      D6, D7                          // Store enemy BOTTOM
+00001B82  0687 00000020           1185      add.l       #ENEMY_HEIGHT, D7
+00001B88                          1186      
+00001B88                          1187  ASSERT_PLAYER_LEFT_COL:
+00001B88  2239 000E3DD4           1188      move.l      PLAYER_X_POSITION, D1
+00001B8E  E081                    1189      asr.l       #8, D1
+00001B90  2439 000E4A26           1190      move.l      ENEMY_X_POS, D2
+00001B96  0682 00000020           1191      add.l       #ENEMY_WIDTH, D2
+00001B9C  B481                    1192      cmp.l       D1, D2
+00001B9E  6D00 0068               1193      blt         DO_NOT_COLLIDE_PLAYER
+00001BA2                          1194  ASSERT_PLAYER_RIGHT_COL:
+00001BA2  2239 000E3DD4           1195      move.l      PLAYER_X_POSITION, D1
+00001BA8  E081                    1196      asr.l       #8, D1
+00001BAA  2439 000E4A26           1197      move.l      ENEMY_X_POS, D2
+00001BB0  0681 00000020           1198      add.l       #PLAYER_WIDTH, D1
+00001BB6  B481                    1199      cmp.l       D1, D2
+00001BB8  6E00 004E               1200      bgt         DO_NOT_COLLIDE_PLAYER
+00001BBC                          1201  ASSERT_PLAYER_TOP_COL:
+00001BBC  223C 00000184           1202      move.l      #PLAYER_Y_POSITION, D1
+00001BC2  2439 000E4A2A           1203      move.l      ENEMY_Y_POS, D2
+00001BC8  E082                    1204      asr.l       #8, D2                      // Shift off fractional bits
+00001BCA  0682 00000020           1205      add.l       #ENEMY_HEIGHT, D2
+00001BD0  B481                    1206      cmp.l       D1, D2
+00001BD2  6D00 0034               1207      blt         DO_NOT_COLLIDE_PLAYER
+00001BD6                          1208  ASSERT_PLAYER_BOTTOM_COL:
+00001BD6  223C 00000184           1209      move.l      #PLAYER_Y_POSITION, D1
+00001BDC  2439 000E4A2A           1210      move.l      ENEMY_Y_POS, D2
+00001BE2  E082                    1211      asr.l       #8, D2                      // Shift off fractional bits
+00001BE4  0681 00000020           1212      add.l       #PLAYER_HEIGHT, D1
+00001BEA  B481                    1213      cmp.l       D1, D2
+00001BEC  6E00 001A               1214      bgt         DO_NOT_COLLIDE_PLAYER
+00001BF0                          1215      
+00001BF0  23FC 00000000 000E4A5E  1216      move.l      #0, PLAYER_ALIVE
+00001BFA  203C 00000049           1217      move.l      #PLAY_SOUND_TRAP_TASK, D0
+00001C00  43F9 000E4ACD           1218      lea         DeathSound, A1
+00001C06  4E4F                    1219      trap        #15
+00001C08                          1220  DO_NOT_COLLIDE_PLAYER:
+00001C08                          1221      
+00001C08  4CDF 7FFF               1222      movem.l     (SP)+, ALL_REG
+00001C0C  4E75                    1223      RTS
+00001C0E                          1224  
+00001C0E                          1225  ******************************************************************************************************************************
+00001C0E                          1226  ******************************************************************************************************************************    
+00001C0E                          1227  ***  _____   _____ ______________  __________   ________   _____ __  ______  ____  ____  __  _____________   _____________ ***
+00001C0E                          1228  *** /__  /  / ___// ____/ ____/  |/  / ____/ | / /_  __/  / ___// / / / __ )/ __ \/ __ \/ / / /_  __/  _/ | / / ____/ ___/ ***
+00001C0E                          1229  ***   / /   \__ \/ __/ / / __/ /|_/ / __/ /  |/ / / /     \__ \/ / / / __  / /_/ / / / / / / / / /  / //  |/ / __/  \__ \  ***
+00001C0E                          1230  ***  / /   ___/ / /___/ /_/ / /  / / /___/ /|  / / /     ___/ / /_/ / /_/ / _, _/ /_/ / /_/ / / / _/ // /|  / /___ ___/ /  ***
+00001C0E                          1231  *** /_/   /____/_____/\____/_/  /_/_____/_/ |_/ /_/     /____/\____/_____/_/ |_|\____/\____/ /_/ /___/_/ |_/_____//____/   ***
+00001C0E                          1232  ***                                                                                                                        ***
+00001C0E                          1233  ******************************************************************************************************************************
+00001C0E                          1234  ******************************************************************************************************************************
+00001C0E                          1235  
+00001C0E                          1236  DRAW_7SEG_A:
+00001C0E  48E7 F800               1237      movem.l     LINE_RENDERING_REGS, -(SP)   
+00001C12                          1238  
+00001C12  7050                    1239      move.l      #SET_PEN_COLOR_COMMAND, D0
+00001C14  223C 00FFFFFF           1240      move.l      #$FFFFFF, D1
+00001C1A  4E4F                    1241      trap        #15
+00001C1C                          1242  
+00001C1C  203C 00000054           1243      move.l      #DRAW_LINE_TRAP_TASK, D0
+00001C22  223C 00000257           1244      move.l      #SEGMENT_A_X1, D1
+00001C28  243C 000001B6           1245      move.l      #SEGMENT_A_Y1, D2
+00001C2E  263C 00000267           1246      move.l      #SEGMENT_A_X2, D3
+00001C34  283C 000001B6           1247      move.l      #SEGMENT_A_Y2, D4
+00001C3A  4E4F                    1248      trap        #15
+00001C3C                          1249  
+00001C3C  4CDF 001F               1250      movem.l     (SP)+, LINE_RENDERING_REGS   
+00001C40  4E75                    1251      RTS
+00001C42                          1252      
+00001C42                          1253  DRAW_7SEG_B:
+00001C42  48E7 F800               1254      movem.l     LINE_RENDERING_REGS, -(SP)   
+00001C46                          1255  
+00001C46  7050                    1256      move.l      #SET_PEN_COLOR_COMMAND, D0
+00001C48  223C 00FFFFFF           1257      move.l      #$FFFFFF, D1
+00001C4E  4E4F                    1258      trap        #15
+00001C50                          1259  
+00001C50  203C 00000054           1260      move.l      #DRAW_LINE_TRAP_TASK, D0
+00001C56  223C 00000267           1261      move.l      #SEGMENT_B_X1, D1
+00001C5C  243C 000001B6           1262      move.l      #SEGMENT_B_Y1, D2
+00001C62  263C 00000267           1263      move.l      #SEGMENT_B_X2, D3
+00001C68  283C 000001C6           1264      move.l      #SEGMENT_B_Y2, D4
+00001C6E  4E4F                    1265      trap        #15
+00001C70                          1266  
+00001C70  4CDF 001F               1267      movem.l     (SP)+, LINE_RENDERING_REGS   
+00001C74  4E75                    1268      RTS
+00001C76                          1269      
+00001C76                          1270  DRAW_7SEG_C:
+00001C76  48E7 F800               1271      movem.l     LINE_RENDERING_REGS, -(SP)   
+00001C7A                          1272  
+00001C7A  7050                    1273      move.l      #SET_PEN_COLOR_COMMAND, D0
+00001C7C  223C 00FFFFFF           1274      move.l      #$FFFFFF, D1
+00001C82  4E4F                    1275      trap        #15
+00001C84                          1276  
+00001C84  203C 00000054           1277      move.l      #DRAW_LINE_TRAP_TASK, D0
+00001C8A  223C 00000267           1278      move.l      #SEGMENT_C_X1, D1
+00001C90  243C 000001C6           1279      move.l      #SEGMENT_C_Y1, D2
+00001C96  263C 00000267           1280      move.l      #SEGMENT_C_X2, D3
+00001C9C  283C 000001D6           1281      move.l      #SEGMENT_C_Y2, D4
+00001CA2  4E4F                    1282      trap        #15
+00001CA4                          1283  
+00001CA4  4CDF 001F               1284      movem.l     (SP)+, LINE_RENDERING_REGS   
+00001CA8  4E75                    1285      RTS
+00001CAA                          1286      
+00001CAA                          1287  DRAW_7SEG_D:
+00001CAA  48E7 F800               1288      movem.l     LINE_RENDERING_REGS, -(SP)   
+00001CAE                          1289  
+00001CAE  7050                    1290      move.l      #SET_PEN_COLOR_COMMAND, D0
+00001CB0  223C 00FFFFFF           1291      move.l      #$FFFFFF, D1
+00001CB6  4E4F                    1292      trap        #15
+00001CB8                          1293  
+00001CB8  203C 00000054           1294      move.l      #DRAW_LINE_TRAP_TASK, D0
+00001CBE  223C 00000257           1295      move.l      #SEGMENT_D_X1, D1
+00001CC4  243C 000001D6           1296      move.l      #SEGMENT_D_Y1, D2
+00001CCA  263C 00000267           1297      move.l      #SEGMENT_D_X2, D3
+00001CD0  283C 000001D6           1298      move.l      #SEGMENT_D_Y2, D4
+00001CD6  4E4F                    1299      trap        #15
+00001CD8                          1300  
+00001CD8  4CDF 001F               1301      movem.l     (SP)+, LINE_RENDERING_REGS   
+00001CDC  4E75                    1302      RTS
+00001CDE                          1303  
+00001CDE                          1304  DRAW_7SEG_E:
+00001CDE  48E7 F800               1305      movem.l     LINE_RENDERING_REGS, -(SP)   
+00001CE2                          1306  
+00001CE2  7050                    1307      move.l      #SET_PEN_COLOR_COMMAND, D0
+00001CE4  223C 00FFFFFF           1308      move.l      #$FFFFFF, D1
+00001CEA  4E4F                    1309      trap        #15
+00001CEC                          1310  
+00001CEC  203C 00000054           1311      move.l      #DRAW_LINE_TRAP_TASK, D0
+00001CF2  223C 00000257           1312      move.l      #SEGMENT_E_X1, D1
+00001CF8  243C 000001C6           1313      move.l      #SEGMENT_E_Y1, D2
+00001CFE  263C 00000257           1314      move.l      #SEGMENT_E_X2, D3
+00001D04  283C 000001D6           1315      move.l      #SEGMENT_E_Y2, D4
+00001D0A  4E4F                    1316      trap        #15
+00001D0C                          1317  
+00001D0C  4CDF 001F               1318      movem.l     (SP)+, LINE_RENDERING_REGS   
+00001D10  4E75                    1319      RTS
+00001D12                          1320      
+00001D12                          1321  DRAW_7SEG_F:
+00001D12  48E7 F800               1322      movem.l     LINE_RENDERING_REGS, -(SP)   
+00001D16                          1323  
+00001D16  7050                    1324      move.l      #SET_PEN_COLOR_COMMAND, D0
+00001D18  223C 00FFFFFF           1325      move.l      #$FFFFFF, D1
+00001D1E  4E4F                    1326      trap        #15
+00001D20                          1327  
+00001D20  203C 00000054           1328      move.l      #DRAW_LINE_TRAP_TASK, D0
+00001D26  223C 00000257           1329      move.l      #SEGMENT_F_X1, D1
+00001D2C  243C 000001B6           1330      move.l      #SEGMENT_F_Y1, D2
+00001D32  263C 00000257           1331      move.l      #SEGMENT_F_X2, D3
+00001D38  283C 000001C6           1332      move.l      #SEGMENT_F_Y2, D4
+00001D3E  4E4F                    1333      trap        #15
+00001D40                          1334  
+00001D40  4CDF 001F               1335      movem.l     (SP)+, LINE_RENDERING_REGS   
+00001D44  4E75                    1336      RTS
+00001D46                          1337  
+00001D46                          1338  DRAW_7SEG_G:
+00001D46  48E7 F800               1339      movem.l     LINE_RENDERING_REGS, -(SP)   
+00001D4A                          1340  
+00001D4A  7050                    1341      move.l      #SET_PEN_COLOR_COMMAND, D0
+00001D4C  223C 00FFFFFF           1342      move.l      #$FFFFFF, D1
+00001D52  4E4F                    1343      trap        #15
+00001D54                          1344  
+00001D54  203C 00000054           1345      move.l      #DRAW_LINE_TRAP_TASK, D0
+00001D5A  223C 00000257           1346      move.l      #SEGMENT_G_X1, D1
+00001D60  243C 000001C6           1347      move.l      #SEGMENT_G_Y1, D2
+00001D66  263C 00000267           1348      move.l      #SEGMENT_G_X2, D3
+00001D6C  283C 000001C6           1349      move.l      #SEGMENT_G_Y2, D4
+00001D72  4E4F                    1350      trap        #15
+00001D74                          1351  
+00001D74  4CDF 001F               1352      movem.l     (SP)+, LINE_RENDERING_REGS   
+00001D78  4E75                    1353      RTS
+00001D7A                          1354  
+00001D7A                          1355  DRAW_7SEG_A_TENS:
+00001D7A  48E7 F800               1356      movem.l     LINE_RENDERING_REGS, -(SP)   
+00001D7E                          1357  
+00001D7E  7050                    1358      move.l      #SET_PEN_COLOR_COMMAND, D0
+00001D80  223C 00FFFFFF           1359      move.l      #$FFFFFF, D1
+00001D86  4E4F                    1360      trap        #15
+00001D88                          1361  
+00001D88  203C 00000054           1362      move.l      #DRAW_LINE_TRAP_TASK, D0
+00001D8E  223C 0000023F           1363      move.l      #TENS_SEGMENT_A_X1, D1
+00001D94  243C 000001B6           1364      move.l      #TENS_SEGMENT_A_Y1, D2
+00001D9A  263C 0000024F           1365      move.l      #TENS_SEGMENT_A_X2, D3
+00001DA0  283C 000001B6           1366      move.l      #TENS_SEGMENT_A_Y2, D4
+00001DA6  4E4F                    1367      trap        #15
+00001DA8                          1368  
+00001DA8  4CDF 001F               1369      movem.l     (SP)+, LINE_RENDERING_REGS   
+00001DAC  4E75                    1370      RTS
+00001DAE                          1371      
+00001DAE                          1372  DRAW_7SEG_B_TENS:
+00001DAE  48E7 F800               1373      movem.l     LINE_RENDERING_REGS, -(SP)   
+00001DB2                          1374  
+00001DB2  7050                    1375      move.l      #SET_PEN_COLOR_COMMAND, D0
+00001DB4  223C 00FFFFFF           1376      move.l      #$FFFFFF, D1
+00001DBA  4E4F                    1377      trap        #15
+00001DBC                          1378  
+00001DBC  203C 00000054           1379      move.l      #DRAW_LINE_TRAP_TASK, D0
+00001DC2  223C 0000024F           1380      move.l      #TENS_SEGMENT_B_X1, D1
+00001DC8  243C 000001B6           1381      move.l      #TENS_SEGMENT_B_Y1, D2
+00001DCE  263C 0000024F           1382      move.l      #TENS_SEGMENT_B_X2, D3
+00001DD4  283C 000001C6           1383      move.l      #TENS_SEGMENT_B_Y2, D4
+00001DDA  4E4F                    1384      trap        #15
+00001DDC                          1385  
+00001DDC  4CDF 001F               1386      movem.l     (SP)+, LINE_RENDERING_REGS   
+00001DE0  4E75                    1387      RTS
+00001DE2                          1388      
+00001DE2                          1389  DRAW_7SEG_C_TENS:
+00001DE2  48E7 F800               1390      movem.l     LINE_RENDERING_REGS, -(SP)   
+00001DE6                          1391  
+00001DE6  7050                    1392      move.l      #SET_PEN_COLOR_COMMAND, D0
+00001DE8  223C 00FFFFFF           1393      move.l      #$FFFFFF, D1
+00001DEE  4E4F                    1394      trap        #15
+00001DF0                          1395  
+00001DF0  203C 00000054           1396      move.l      #DRAW_LINE_TRAP_TASK, D0
+00001DF6  223C 0000024F           1397      move.l      #TENS_SEGMENT_C_X1, D1
+00001DFC  243C 000001C6           1398      move.l      #TENS_SEGMENT_C_Y1, D2
+00001E02  263C 0000024F           1399      move.l      #TENS_SEGMENT_C_X2, D3
+00001E08  283C 000001D6           1400      move.l      #TENS_SEGMENT_C_Y2, D4
+00001E0E  4E4F                    1401      trap        #15
+00001E10                          1402  
+00001E10  4CDF 001F               1403      movem.l     (SP)+, LINE_RENDERING_REGS   
+00001E14  4E75                    1404      RTS
+00001E16                          1405      
+00001E16                          1406  DRAW_7SEG_D_TENS:
+00001E16  48E7 F800               1407      movem.l     LINE_RENDERING_REGS, -(SP)   
+00001E1A                          1408  
+00001E1A  7050                    1409      move.l      #SET_PEN_COLOR_COMMAND, D0
+00001E1C  223C 00FFFFFF           1410      move.l      #$FFFFFF, D1
+00001E22  4E4F                    1411      trap        #15
+00001E24                          1412  
+00001E24  203C 00000054           1413      move.l      #DRAW_LINE_TRAP_TASK, D0
+00001E2A  223C 0000023F           1414      move.l      #TENS_SEGMENT_D_X1, D1
+00001E30  243C 000001D6           1415      move.l      #TENS_SEGMENT_D_Y1, D2
+00001E36  263C 0000024F           1416      move.l      #TENS_SEGMENT_D_X2, D3
+00001E3C  283C 000001D6           1417      move.l      #TENS_SEGMENT_D_Y2, D4
+00001E42  4E4F                    1418      trap        #15
+00001E44                          1419  
+00001E44  4CDF 001F               1420      movem.l     (SP)+, LINE_RENDERING_REGS   
+00001E48  4E75                    1421      RTS
+00001E4A                          1422  
+00001E4A                          1423  DRAW_7SEG_E_TENS:
+00001E4A  48E7 F800               1424      movem.l     LINE_RENDERING_REGS, -(SP)   
+00001E4E                          1425  
+00001E4E  7050                    1426      move.l      #SET_PEN_COLOR_COMMAND, D0
+00001E50  223C 00FFFFFF           1427      move.l      #$FFFFFF, D1
+00001E56  4E4F                    1428      trap        #15
+00001E58                          1429  
+00001E58  203C 00000054           1430      move.l      #DRAW_LINE_TRAP_TASK, D0
+00001E5E  223C 0000023F           1431      move.l      #TENS_SEGMENT_E_X1, D1
+00001E64  243C 000001C6           1432      move.l      #TENS_SEGMENT_E_Y1, D2
+00001E6A  263C 0000023F           1433      move.l      #TENS_SEGMENT_E_X2, D3
+00001E70  283C 000001D6           1434      move.l      #TENS_SEGMENT_E_Y2, D4
+00001E76  4E4F                    1435      trap        #15
+00001E78                          1436  
+00001E78  4CDF 001F               1437      movem.l     (SP)+, LINE_RENDERING_REGS   
+00001E7C  4E75                    1438      RTS
+00001E7E                          1439      
+00001E7E                          1440  DRAW_7SEG_F_TENS:
+00001E7E  48E7 F800               1441      movem.l     LINE_RENDERING_REGS, -(SP)   
+00001E82                          1442  
+00001E82  7050                    1443      move.l      #SET_PEN_COLOR_COMMAND, D0
+00001E84  223C 00FFFFFF           1444      move.l      #$FFFFFF, D1
+00001E8A  4E4F                    1445      trap        #15
+00001E8C                          1446  
+00001E8C  203C 00000054           1447      move.l      #DRAW_LINE_TRAP_TASK, D0
+00001E92  223C 0000023F           1448      move.l      #TENS_SEGMENT_F_X1, D1
+00001E98  243C 000001B6           1449      move.l      #TENS_SEGMENT_F_Y1, D2
+00001E9E  263C 0000023F           1450      move.l      #TENS_SEGMENT_F_X2, D3
+00001EA4  283C 000001C6           1451      move.l      #TENS_SEGMENT_F_Y2, D4
+00001EAA  4E4F                    1452      trap        #15
+00001EAC                          1453  
+00001EAC  4CDF 001F               1454      movem.l     (SP)+, LINE_RENDERING_REGS   
+00001EB0  4E75                    1455      RTS
+00001EB2                          1456  
+00001EB2                          1457  DRAW_7SEG_G_TENS:
+00001EB2  48E7 F800               1458      movem.l     LINE_RENDERING_REGS, -(SP)   
+00001EB6                          1459  
+00001EB6  7050                    1460      move.l      #SET_PEN_COLOR_COMMAND, D0
+00001EB8  223C 00FFFFFF           1461      move.l      #$FFFFFF, D1
+00001EBE  4E4F                    1462      trap        #15
+00001EC0                          1463  
+00001EC0  203C 00000054           1464      move.l      #DRAW_LINE_TRAP_TASK, D0
+00001EC6  223C 0000023F           1465      move.l      #TENS_SEGMENT_G_X1, D1
+00001ECC  243C 000001C6           1466      move.l      #TENS_SEGMENT_G_Y1, D2
+00001ED2  263C 0000024F           1467      move.l      #TENS_SEGMENT_G_X2, D3
+00001ED8  283C 000001C6           1468      move.l      #TENS_SEGMENT_G_Y2, D4
+00001EDE  4E4F                    1469      trap        #15
+00001EE0                          1470  
+00001EE0  4CDF 001F               1471      movem.l     (SP)+, LINE_RENDERING_REGS   
+00001EE4  4E75                    1472      RTS
+00001EE6                          1473  
+00001EE6                          1474      
+00001EE6                          1475  ***********************************************************
+00001EE6                          1476  *** Renders a numerical value on the 7-segment display  ***
+00001EE6                          1477  ***********************************************************
+00001EE6                          1478  *** Arguments *********************************************
+00001EE6                          1479  *** Value to be rendered(long)                          ***
+00001EE6                          1480  ***********************************************************
+00001EE6                          1481  *** Registers *********************************************
+00001EE6                          1482  *** D1: Value to be rendered                            ***
+00001EE6                          1483  *** D1: Stores the singles value to be rendered         ***
+00001EE6                          1484  *** D2: Stores the 7seg table value                     ***
+00001EE6                          1485  *** A0: 7 Segment Instruction Table                     ***
+00001EE6                          1486  *** A1: Address of segment rendering function           ***
+00001EE6                          1487  *** A2: Function pointer jump location                  ***
+00001EE6                          1488  *** D1: Later holds binary table value data             ***
+00001EE6                          1489  *** D2: After indexing, stores loop counter             ***
+00001EE6                          1490  *** D3: Stores the right-most bit of D1 for comparison  ***
+00001EE6                          1491  *** D3: After bit masking, stores the function location ***
+00001EE6                          1492  *** D4: Stores the tens value to be rendered            ***
+00001EE6                          1493  *** D7: Stores a flag to repeat once
+00001EE6                          1494  ***********************************************************
+00001EE6                          1495  RENDER_7SEG_VALUE:
+00001EE6  48E7 FFFE               1496      movem.l     ALL_REG,-(SP)                    
+00001EEA                          1497  
+00001EEA  222F 0040               1498      move.l      ALL_REG_BYTE_SIZE+ARG_1(SP), D1
+00001EEE                          1499      
+00001EEE  82FC 000A               1500      divu        #10, D1                         // Get 10's in lower and singles in upper
+00001EF2  4284                    1501      clr.l       D4
+00001EF4  3801                    1502      move.w      D1, D4                          // Move tens value to D4
+00001EF6  E089                    1503      lsr.l       #8, D1
+00001EF8  E089                    1504      lsr.l       #8, D1
+00001EFA                          1505      
+00001EFA  41F9 000E4A66           1506      lea         LED_INSTRUCTION_TABLE, A0
+00001F00  D1C1                    1507      add.l       D1, A0
+00001F02  1210                    1508      move.b      (A0), D1
+00001F04                          1509      
+00001F04  43F9 000E4A70           1510      lea         SEGMENT_FUNCTION_TABLE, A1      // Store table of function pointers
+00001F0A                          1511      
+00001F0A  7407                    1512      move.l      #7, D2                          // Initialize counter
+00001F0C                          1513  ITERATE_OVER_DISPLAY_VALUE:
+00001F0C  1601                    1514      move.b      D1, D3                          // Move the rightmost byte to D3
+00001F0E  0203 0001               1515      andi.b      #1, D3                          // Mask off rightmost bit in D3
+00001F12  B63C 0001               1516      cmp.b       #1, D3
+00001F16  6700 0006               1517      beq         RENDER_NEXT_SEGMENT
+00001F1A  6000 0008               1518      bra         BYPASS_RENDER_NEXT_SEGMENT
+00001F1E                          1519      
+00001F1E                          1520  RENDER_NEXT_SEGMENT:
+00001F1E  2611                    1521      move.l      (A1), D3
+00001F20  2443                    1522      move.l      D3, A2
+00001F22  4E92                    1523      JSR         (A2)                            // Jump to function pointer for rendering proper segment
+00001F24                          1524  BYPASS_RENDER_NEXT_SEGMENT:
+00001F24  5889                    1525      adda.l      #4, A1                          // Offset function table to next segment
+00001F26  E289                    1526      lsr.l       #1, D1                          // Push least significant bit off table value
+00001F28                          1527  
+00001F28  5382                    1528      subi.l      #1, D2
+00001F2A  66E0                    1529      bne         ITERATE_OVER_DISPLAY_VALUE
+00001F2C                          1530      
+00001F2C                          1531      *** Repeat rendering for tens values ***
+00001F2C  2204                    1532      move.l      D4, D1                          // Move tens value to D1 for iterating
+00001F2E                          1533      
+00001F2E                          1534      
+00001F2E  41F9 000E4A66           1535      lea         LED_INSTRUCTION_TABLE, A0
+00001F34  D1C1                    1536      add.l       D1, A0
+00001F36  1210                    1537      move.b      (A0), D1
+00001F38                          1538      
+00001F38  43F9 000E4A8C           1539      lea         TENS_SEGMENT_FUNCTION_TABLE, A1      // Store table of function pointers
+00001F3E                          1540      
+00001F3E  7407                    1541      move.l      #7, D2                          // Initialize counter
+00001F40                          1542  ITERATE_OVER_TENS_DISPLAY_VALUE:
+00001F40  1601                    1543      move.b      D1, D3                          // Move the rightmost byte to D3
+00001F42  0203 0001               1544      andi.b      #1, D3                          // Mask off rightmost bit in D3
+00001F46  B63C 0001               1545      cmp.b       #1, D3
+00001F4A  6700 0006               1546      beq         RENDER_NEXT_TENS_SEGMENT
+00001F4E  6000 0008               1547      bra         BYPASS_RENDER_NEXT_TENS_SEGMENT
+00001F52                          1548      
+00001F52                          1549  RENDER_NEXT_TENS_SEGMENT:
+00001F52  2611                    1550      move.l      (A1), D3
+00001F54  2443                    1551      move.l      D3, A2
+00001F56  4E92                    1552      JSR         (A2)                            // Jump to function pointer for rendering proper segment
+00001F58                          1553  BYPASS_RENDER_NEXT_TENS_SEGMENT:
+00001F58  5889                    1554      adda.l      #4, A1                          // Offset function table to next segment
+00001F5A  E289                    1555      lsr.l       #1, D1                          // Push least significant bit off table value
+00001F5C                          1556  
+00001F5C  5382                    1557      subi.l      #1, D2
+00001F5E  66E0                    1558      bne         ITERATE_OVER_TENS_DISPLAY_VALUE
+00001F60                          1559  
+00001F60                          1560      *** Display Score Text ***
+00001F60  203C 0000005F           1561      move.l      #DISPLAY_TEXT_TRAP_TASK, D0
+00001F66  223C 0000023F           1562      move.l      #SCORE_TEXT_X_POS, D1
+00001F6C  243C 000001A7           1563      move.l      #SCORE_TEXT_Y_POS, D2
+00001F72  43F9 000E4AA8           1564      lea         SCORE_TEXT, A1
+00001F78  4E4F                    1565      trap        #15
+00001F7A                          1566  
+00001F7A  4CDF 7FFF               1567      movem.l     (SP)+, ALL_REG                   
+00001F7E  4E75                    1568      RTS
+00001F80                          1569      
+00001F80                          1570  **********************************************
+00001F80                          1571  *** Wipes the 7seg for next rendering pass ***
+00001F80                          1572  **********************************************
+00001F80                          1573  CLEAR_7_SEG_DISPLAY:
+00001F80  48E7 FFFE               1574      movem.l     ALL_REG, -(SP)                    
+00001F84                          1575  
+00001F84  2639 000E316E           1576      move.l      BackgroundImageHeight, D3
+00001F8A  0483 000001B5           1577      sub.l       #(DISPLAY_Y_POS-1), D3                  
+00001F90  0483 00000022           1578      sub.l       #(SEGMENT_LENGTH+SEGMENT_LENGTH+2), D3 // Offset y value to account for bmp image inversion
+00001F96                          1579      
+00001F96                          1580      *** Clear Tens Display ***
+00001F96  2F3C 0000023E           1581      move.l      #(DISPLAY_X_POS-1), -(SP)
+00001F9C  2F03                    1582      move.l      D3, -(SP)
+00001F9E  2F3C 00000012           1583      move.l      #(SEGMENT_LENGTH+2), -(SP)    
+00001FA4  2F3C 00000022           1584      move.l      #(SEGMENT_LENGTH+SEGMENT_LENGTH+2), -(SP)
+00001FAA  2F3C 0000023E           1585      move.l      #(DISPLAY_X_POS-1), -(SP)
+00001FB0  2F3C 000001B5           1586      move.l      #(DISPLAY_Y_POS-1), -(SP)
+00001FB6  4EB8 12C8               1587      JSR         RENDER_BACKGROUND_CHUNK
+00001FBA  7018                    1588      move.l      #SIX_ARGS, D0
+00001FBC  DFC0                    1589      add.l       D0, SP
+00001FBE                          1590      
+00001FBE                          1591      *** Clear Singles Display ***
+00001FBE  2F3C 00000256           1592      move.l      #(DISPLAY_X_POS-1+ONES_SEGMENT_OFFSET), -(SP)
+00001FC4  2F03                    1593      move.l      D3, -(SP)
+00001FC6  2F3C 00000012           1594      move.l      #(SEGMENT_LENGTH+2), -(SP)    
+00001FCC  2F3C 00000022           1595      move.l      #(SEGMENT_LENGTH+SEGMENT_LENGTH+2), -(SP)
+00001FD2  2F3C 00000256           1596      move.l      #(DISPLAY_X_POS-1+ONES_SEGMENT_OFFSET), -(SP)
+00001FD8  2F3C 000001B5           1597      move.l      #(DISPLAY_Y_POS-1), -(SP)
+00001FDE  4EB8 12C8               1598      JSR         RENDER_BACKGROUND_CHUNK
+00001FE2  7018                    1599      move.l      #SIX_ARGS, D0
+00001FE4  DFC0                    1600      add.l       D0, SP
+00001FE6                          1601      
+00001FE6  4CDF 7FFF               1602      movem.l     (SP)+, ALL_REG                   
+00001FEA  4E75                    1603      RTS
+00001FEC                          1604      
+00001FEC                          1605  seedRandomNumber:
+00001FEC  48E7 FFFE               1606          movem.l ALL_REG,-(sp)
+00001FF0  4286                    1607          clr.l   d6
+00001FF2  103C 0008               1608          move.b  #GET_TIME_COMMAND,d0
+00001FF6  4E4F                    1609          TRAP    #15
+00001FF8                          1610  
+00001FF8  23C1 00002130           1611          move.l  d1,RANDOMVAL
+00001FFE  4CDF 7FFF               1612          movem.l (sp)+,ALL_REG
+00002002  4E75                    1613          rts
+00002004                          1614  
+00002004                          1615  getRandomByteIntoD6:
+00002004  48E7 8000               1616          movem.l d0,-(sp)
+00002008  48E7 4000               1617          movem.l d1,-(sp)
+0000200C  48E7 2000               1618          movem.l d2,-(sp)
+00002010  2039 00002130           1619          move.l  RANDOMVAL,d0
+00002016  72AF                    1620          moveq   #$AF-$100,d1
+00002018  7412                    1621          moveq   #18,d2
+0000201A                          1622  Ninc0   
+0000201A  D080                    1623      add.l   d0,d0
+0000201C  6400 0004               1624      bcc Ninc1
+00002020  B300                    1625      eor.b   d1,d0
+00002022                          1626  Ninc1
+00002022  51CA FFF6               1627      dbf d2,Ninc0
+00002026                          1628      
+00002026  23C0 00002130           1629      move.l  d0,RANDOMVAL
+0000202C  4286                    1630      clr.l   d6
+0000202E  1C00                    1631      move.b  d0,d6
+00002030                          1632      
+00002030  4CDF 0004               1633          movem.l (sp)+,d2
+00002034  4CDF 0002               1634          movem.l (sp)+,d1
+00002038  4CDF 0001               1635          movem.l (sp)+,d0
+0000203C  4E75                    1636          RTS
+0000203E                          1637  
+0000203E                          1638  getRandomLongIntoD6:
+0000203E  48E7 FFFE               1639          movem.l ALL_REG,-(sp)
+00002042  4EB8 2004               1640          JSR     getRandomByteIntoD6
+00002046  1A06                    1641          move.b  d6,d5
+00002048  4EB8 2004               1642          JSR     getRandomByteIntoD6
+0000204C  E18D                    1643          lsl.l   #8,d5
+0000204E  1A06                    1644          move.b  d6,d5
+00002050  4EB8 2004               1645          JSR     getRandomByteIntoD6
+00002054  E18D                    1646          lsl.l   #8,d5
+00002056  1A06                    1647          move.b  d6,d5
+00002058  4EB8 2004               1648          JSR     getRandomByteIntoD6
+0000205C  E18D                    1649          lsl.l   #8,d5
+0000205E  1A06                    1650          move.b  d6,d5
+00002060  23C5 00002134           1651          move.l  d5,TEMPRANDOMLONG
+00002066  4CDF 7FFF               1652          movem.l (sp)+,ALL_REG
+0000206A  2C39 00002134           1653          move.l  TEMPRANDOMLONG,d6
+00002070  4E75                    1654          RTS
+00002072                          1655          
+00002072                          1656  ************************************************************
+00002072                          1657  *** Hangs game on initial run until player presses enter ***
+00002072                          1658  ************************************************************
+00002072                          1659  LISTEN_FOR_GAME_START:
+00002072  48E7 FFFE               1660      movem.l     ALL_REG, -(SP)
+00002076                          1661      
+00002076  103C 0013               1662      MOVE.B      #LISTEN_FOR_INPUTS, D0
+0000207A  223C 0000000D           1663      move.l      #ENTER_KEY, D1
+00002080  4E4F                    1664      trap        #15
+00002082                          1665      
+00002082  B23C 00FF               1666      cmp.b       #$FF, D1
+00002086  6700 0006               1667      beq         SET_GAME_STARTED
+0000208A  6000 000C               1668      bra         BYPASS_SET_GAME_STARTED
+0000208E                          1669  SET_GAME_STARTED:
+0000208E  23FC 00000000 000E4B1E  1670      move.l      #0, FIRST_RUN
+00002098                          1671  BYPASS_SET_GAME_STARTED:
+00002098                          1672      
+00002098  4CDF 7FFF               1673      movem.l     (SP)+, ALL_REG
+0000209C  4E75                    1674      RTS
+0000209E                          1675      
+0000209E                          1676  **************************************************
+0000209E                          1677  *** Displays controls and credits for the game ***
+0000209E                          1678  **************************************************
+0000209E                          1679  DISPLAY_START_TEXT:
+0000209E  48E7 FFFE               1680      movem.l     ALL_REG, -(SP)
+000020A2                          1681      
+000020A2  203C 00000015           1682      move.l      #SET_FONT_TRAP_TASK, D0
+000020A8  223C 00FFFF00           1683      move.l      #$FFFF00, D1
+000020AE  243C 60120000           1684      move.l      #TITLE_FONT, D2
+000020B4  4E4F                    1685      trap        #15
+000020B6                          1686      
+000020B6  203C 0000005F           1687      move.l      #DISPLAY_TEXT_TRAP_TASK, D0
+000020BC  43F9 000E4B30           1688      lea         GameName,        A1
+000020C2  223C 000000F0           1689      move.l      #GAME_NAME_X_POS, D1
+000020C8  243C 000000C8           1690      move.l      #GAME_NAME_Y_POS, D2
+000020CE  4E4F                    1691      trap        #15
+000020D0                          1692      
+000020D0  203C 00000015           1693      move.l      #SET_FONT_TRAP_TASK, D0
+000020D6  223C 00FFFFFF           1694      move.l      #$FFFFFF, D1
+000020DC  243C 600C0000           1695      move.l      #STANDARD_FONT, D2
+000020E2  4E4F                    1696      trap        #15
+000020E4                          1697      
+000020E4  203C 0000005F           1698      move.l      #DISPLAY_TEXT_TRAP_TASK, D0
+000020EA  43F9 000E4B7F           1699      lea         PressEnterToBeginText, A1
+000020F0  223C 000000F5           1700      move.l      #PRESS_ENTER_X_POS, D1
+000020F6  243C 000000FA           1701      move.l      #PRESS_ENTER_Y_POS, D2
+000020FC  4E4F                    1702      trap        #15
+000020FE                          1703      
+000020FE  43F9 000E4B3C           1704      lea         DeveloperCredits, A1
+00002104  223C 000000F0           1705      move.l      #DEV_NAME_X_POS, D1
+0000210A  243C 00000190           1706      move.l      #DEV_NAME_Y_POS, D2
+00002110  4E4F                    1707      trap        #15
+00002112                          1708      
+00002112  43F9 000E4B52           1709      lea         MusicCredits, A1
+00002118  223C 00000096           1710      move.l      #MUSIC_CRED_X_POS, D1
+0000211E  243C 000001AE           1711      move.l      #MUSIC_CRED_Y_POS, D2
+00002124  4E4F                    1712      trap        #15
+00002126                          1713      
+00002126  705E                    1714      move.l      #REPAINT_SCREEN, D0
+00002128  4E4F                    1715      trap        #15
+0000212A                          1716      
+0000212A  4CDF 7FFF               1717      movem.l     (SP)+, ALL_REG
+0000212E  4E75                    1718      RTS
+00002130                          1719          
+00002130                          1720  *************************
+00002130                          1721  *** Random Value Data ***
+00002130                          1722  *************************
+00002130                          1723  RANDOMVAL       ds.l    1
+00002134                          1724  TEMPRANDOMLONG  ds.l    1
+00002138                          1725  
+00002138                          1726  *****************************
+00002138                          1727  *** Background image data ***
+00002138                          1728  *****************************
+00002138                          1729  BackgroundImage             INCBIN  "Background.bmp"
+000E316E                          1730  BackgroundImageHeight       ds.l    1
+000E3172                          1731  BackgroundImagewidth        ds.l    1
+000E3176                          1732  BackgroundImageData         ds.l    1
+000E317A                          1733  BackgroundRowPadding        ds.l    1
+000E317E                          1734  BackgroundChunkWidth        ds.l    1
+000E3182                          1735  BackgroundChunkHeight       ds.l    1
+000E3186  =00002142               1736  BackgroundImageDataOffset   EQU     (BackgroundImage+10)
+000E3186  =0000214A               1737  BackgroundWidthLocation     EQU     (BackgroundImageDataOffset+8)
+000E3186  =0000214E               1738  BackgroundHeightLocation    EQU     (BackgroundWidthLocation+4)
+000E3186  =00000280               1739  BG_WIDTH                    EQU     640
+000E3186  =000001E0               1740  BG_HEIGHT                   EQU     480
+000E3186                          1741  
+000E3186                          1742  *************************
+000E3186                          1743  *** Player image data ***
+000E3186                          1744  *************************
+000E3186                          1745  PlayerImage                 INCBIN  "Player.bmp"
+000E3DBC                          1746  PlayerImageHeight           ds.l    1
+000E3DC0                          1747  PlayerImageWidth            ds.l    1
+000E3DC4                          1748  PlayerImageData             ds.l    1
+000E3DC8                          1749  PlayerRowPadding            ds.l    1
+000E3DCC                          1750  PlayerChunkWidth            ds.l    1
+000E3DD0                          1751  PlayerChunkHeight           ds.l    1
+000E3DD4  =000E3190               1752  PlayerImageDataOffset       EQU     (PlayerImage+10)
+000E3DD4  =000E3198               1753  PlayerWidthLocation         EQU     (PlayerImageDataOffset+8)
+000E3DD4  =000E319C               1754  PlayerHeightLocation        EQU     (PlayerWidthLocation+4)
+000E3DD4  =00000020               1755  PLAYER_WIDTH                EQU     32
+000E3DD4  =00000020               1756  PLAYER_HEIGHT               EQU     32
+000E3DD4  =00000184               1757  PLAYER_Y_POSITION           EQU     (BG_HEIGHT-PLAYER_HEIGHT-60)
+000E3DD4                          1758  PLAYER_X_POSITION           ds.l    1
+000E3DD8                          1759  
+000E3DD8                          1760  ************************
+000E3DD8                          1761  *** Enemy image data ***
+000E3DD8                          1762  ************************
+000E3DD8                          1763  EnemyImage                  INCBIN  "Enemy.bmp"
+000E4A0E                          1764  EnemyImageHeight            ds.l    1
+000E4A12                          1765  EnemyImageWidth             ds.l    1
+000E4A16                          1766  EnemyImageData              ds.l    1
+000E4A1A                          1767  EnemyRowPadding             ds.l    1
+000E4A1E                          1768  EnemyChunkWidth             ds.l    1
+000E4A22                          1769  EnemyChunkHeight            ds.l    1
+000E4A26  =000E3DE2               1770  EnemyImageDataOffset        EQU     (EnemyImage+10)
+000E4A26  =000E3DEA               1771  EnemyWidthLocation          EQU     (EnemyImageDataOffset+8)
+000E4A26  =000E3DEE               1772  EnemyHeightLocation         EQU     (EnemyWidthLocation+4)
+000E4A26  =00000020               1773  ENEMY_WIDTH                 EQU     32
+000E4A26  =00000020               1774  ENEMY_HEIGHT                EQU     32
+000E4A26                          1775  ENEMY_X_POS                 ds.l    1
+000E4A2A                          1776  ENEMY_Y_POS                 ds.l    1
+000E4A2E                          1777  ENEMY_SPEED                 ds.l    1
+000E4A32  =0000007D               1778  ENEMY_SPEED_INCREMENT       EQU     125
+000E4A32                          1779  
+000E4A32                          1780  ***********************
+000E4A32                          1781  *** Projectile data ***
+000E4A32                          1782  ***********************
+000E4A32  =00000009               1783  PROJECTILE_SPEED            EQU     9
+000E4A32  =00000014               1784  PROJECTILE_LENGTH           EQU     20
+000E4A32                          1785  PROJECTILE_X_POS            ds.l    1
+000E4A36                          1786  PROJECTILE_Y_POS            ds.l    1
+000E4A3A                          1787  PROJECTILE_FIRED            ds.l    1
+000E4A3E  =0000000E               1788  PROJECTILE_POS_OFFSET       EQU     14
+000E4A3E                          1789  
+000E4A3E                          1790  *************************
+000E4A3E                          1791  *** Player input data ***
+000E4A3E                          1792  *************************
+000E4A3E                          1793  W_PRESSED                   ds.l    1
+000E4A42                          1794  A_PRESSED                   ds.l    1
+000E4A46                          1795  S_PRESSED                   ds.l    1
+000E4A4A                          1796  D_PRESSED                   ds.l    1
+000E4A4E                          1797  SPACE_PRESSED               ds.l    1
+000E4A52  =FFFFF9C0               1798  MOVING_LEFT                 EQU     -1600
+000E4A52  =00000640               1799  MOVING_RIGHT                EQU     1600
+000E4A52  =00000001               1800  MOVING_DOWN                 EQU     1
+000E4A52  =FFFFFFFF               1801  MOVING_UP                   EQU     -1
+000E4A52                          1802  PLAYER_X_VEL                ds.l    1
+000E4A56                          1803  PLAYER_Y_VEL                ds.l    1
+000E4A5A                          1804  HAVE_HAD_NO_INPUT           ds.l    1
+000E4A5E                          1805  PLAYER_ALIVE                ds.l    1
+000E4A62                          1806  PLAYER_POINTS               ds.l    1
+000E4A66                          1807  
+000E4A66                          1808  ****************************
+000E4A66                          1809  *** LED Instruction Data ***
+000E4A66                          1810  ****************************
+000E4A66  =00000054               1811  DRAW_LINE_TRAP_TASK         equ     84
+000E4A66= 3F 06 5B 4F 66 6D ...   1812  LED_INSTRUCTION_TABLE       dc.b    $3F, $06, $5B, $4F, $66, $6D, $7D, $07, $7F, $6F 
+000E4A70= 00001C0E 00001C42 ...   1813  SEGMENT_FUNCTION_TABLE      dc.l    DRAW_7SEG_A, DRAW_7SEG_B, DRAW_7SEG_C, DRAW_7SEG_D, DRAW_7SEG_E, DRAW_7SEG_F, DRAW_7SEG_G
+000E4A8C= 00001D7A 00001DAE ...   1814  TENS_SEGMENT_FUNCTION_TABLE dc.l    DRAW_7SEG_A_TENS, DRAW_7SEG_B_TENS, DRAW_7SEG_C_TENS, DRAW_7SEG_D_TENS, DRAW_7SEG_E_TENS, DRAW_7SEG_F_TENS, DRAW_7SEG_G_TENS
+000E4AA8  =00000010               1815  SEGMENT_LENGTH              equ     16
+000E4AA8  =00000018               1816  ONES_SEGMENT_OFFSET         EQU     24
+000E4AA8= 53 43 4F 52 45 3A 00    1817  SCORE_TEXT                  dc.b    'SCORE:', 0
+000E4AAF                          1818  
+000E4AAF  =0000023F               1819  DISPLAY_X_POS               equ     575
+000E4AAF  =000001B6               1820  DISPLAY_Y_POS               equ     480-SEGMENT_LENGTH-SEGMENT_LENGTH-10
+000E4AAF  =0000023F               1821  SCORE_TEXT_X_POS            EQU     DISPLAY_X_POS
+000E4AAF  =000001A7               1822  SCORE_TEXT_Y_POS            EQU     DISPLAY_Y_POS-15
+000E4AAF                          1823  
+000E4AAF  =00000257               1824  SEGMENT_A_X1                equ     DISPLAY_X_POS+ONES_SEGMENT_OFFSET
+000E4AAF  =00000267               1825  SEGMENT_A_X2                equ     DISPLAY_X_POS+SEGMENT_LENGTH+ONES_SEGMENT_OFFSET
+000E4AAF  =000001B6               1826  SEGMENT_A_Y1                equ     DISPLAY_Y_POS
+000E4AAF  =000001B6               1827  SEGMENT_A_Y2                equ     DISPLAY_Y_POS   
+000E4AAF                          1828  
+000E4AAF  =00000267               1829  SEGMENT_B_X1                equ     DISPLAY_X_POS+SEGMENT_LENGTH+ONES_SEGMENT_OFFSET
+000E4AAF  =00000267               1830  SEGMENT_B_X2                equ     DISPLAY_X_POS+SEGMENT_LENGTH+ONES_SEGMENT_OFFSET
+000E4AAF  =000001B6               1831  SEGMENT_B_Y1                equ     DISPLAY_Y_POS
+000E4AAF  =000001C6               1832  SEGMENT_B_Y2                equ     DISPLAY_Y_POS+SEGMENT_LENGTH
+000E4AAF                          1833  
+000E4AAF  =00000267               1834  SEGMENT_C_X1                equ     DISPLAY_X_POS+SEGMENT_LENGTH+ONES_SEGMENT_OFFSET
+000E4AAF  =00000267               1835  SEGMENT_C_X2                equ     DISPLAY_X_POS+SEGMENT_LENGTH+ONES_SEGMENT_OFFSET
+000E4AAF  =000001C6               1836  SEGMENT_C_Y1                equ     DISPLAY_Y_POS+SEGMENT_LENGTH
+000E4AAF  =000001D6               1837  SEGMENT_C_Y2                equ     DISPLAY_Y_POS+SEGMENT_LENGTH+SEGMENT_LENGTH
+000E4AAF                          1838  
+000E4AAF  =00000257               1839  SEGMENT_D_X1                equ     DISPLAY_X_POS+ONES_SEGMENT_OFFSET
+000E4AAF  =00000267               1840  SEGMENT_D_X2                equ     DISPLAY_X_POS+SEGMENT_LENGTH+ONES_SEGMENT_OFFSET
+000E4AAF  =000001D6               1841  SEGMENT_D_Y1                equ     DISPLAY_Y_POS+SEGMENT_LENGTH+SEGMENT_LENGTH
+000E4AAF  =000001D6               1842  SEGMENT_D_Y2                equ     DISPLAY_Y_POS+SEGMENT_LENGTH+SEGMENT_LENGTH
+000E4AAF                          1843  
+000E4AAF  =00000257               1844  SEGMENT_E_X1                equ     DISPLAY_X_POS+ONES_SEGMENT_OFFSET
+000E4AAF  =00000257               1845  SEGMENT_E_X2                equ     DISPLAY_X_POS+ONES_SEGMENT_OFFSET
+000E4AAF  =000001C6               1846  SEGMENT_E_Y1                equ     DISPLAY_Y_POS+SEGMENT_LENGTH
+000E4AAF  =000001D6               1847  SEGMENT_E_Y2                equ     DISPLAY_Y_POS+SEGMENT_LENGTH+SEGMENT_LENGTH
+000E4AAF                          1848  
+000E4AAF  =00000257               1849  SEGMENT_F_X1                equ     DISPLAY_X_POS+ONES_SEGMENT_OFFSET
+000E4AAF  =00000257               1850  SEGMENT_F_X2                equ     DISPLAY_X_POS+ONES_SEGMENT_OFFSET
+000E4AAF  =000001B6               1851  SEGMENT_F_Y1                equ     DISPLAY_Y_POS
+000E4AAF  =000001C6               1852  SEGMENT_F_Y2                equ     DISPLAY_Y_POS+SEGMENT_LENGTH
+000E4AAF                          1853  
+000E4AAF  =00000257               1854  SEGMENT_G_X1                equ     DISPLAY_X_POS+ONES_SEGMENT_OFFSET
+000E4AAF  =00000267               1855  SEGMENT_G_X2                equ     DISPLAY_X_POS+SEGMENT_LENGTH+ONES_SEGMENT_OFFSET
+000E4AAF  =000001C6               1856  SEGMENT_G_Y1                equ     DISPLAY_Y_POS+SEGMENT_LENGTH
+000E4AAF  =000001C6               1857  SEGMENT_G_Y2                equ     DISPLAY_Y_POS+SEGMENT_LENGTH
+000E4AAF                          1858  
+000E4AAF  =0000023F               1859  TENS_SEGMENT_A_X1           equ     DISPLAY_X_POS
+000E4AAF  =0000024F               1860  TENS_SEGMENT_A_X2           equ     DISPLAY_X_POS+SEGMENT_LENGTH
+000E4AAF  =000001B6               1861  TENS_SEGMENT_A_Y1           equ     DISPLAY_Y_POS
+000E4AAF  =000001B6               1862  TENS_SEGMENT_A_Y2           equ     DISPLAY_Y_POS   
+000E4AAF                          1863  
+000E4AAF  =0000024F               1864  TENS_SEGMENT_B_X1           equ     DISPLAY_X_POS+SEGMENT_LENGTH
+000E4AAF  =0000024F               1865  TENS_SEGMENT_B_X2           equ     DISPLAY_X_POS+SEGMENT_LENGTH
+000E4AAF  =000001B6               1866  TENS_SEGMENT_B_Y1           equ     DISPLAY_Y_POS
+000E4AAF  =000001C6               1867  TENS_SEGMENT_B_Y2           equ     DISPLAY_Y_POS+SEGMENT_LENGTH
+000E4AAF                          1868  
+000E4AAF  =0000024F               1869  TENS_SEGMENT_C_X1           equ     DISPLAY_X_POS+SEGMENT_LENGTH
+000E4AAF  =0000024F               1870  TENS_SEGMENT_C_X2           equ     DISPLAY_X_POS+SEGMENT_LENGTH
+000E4AAF  =000001C6               1871  TENS_SEGMENT_C_Y1           equ     DISPLAY_Y_POS+SEGMENT_LENGTH
+000E4AAF  =000001D6               1872  TENS_SEGMENT_C_Y2           equ     DISPLAY_Y_POS+SEGMENT_LENGTH+SEGMENT_LENGTH
+000E4AAF                          1873  
+000E4AAF  =0000023F               1874  TENS_SEGMENT_D_X1           equ     DISPLAY_X_POS
+000E4AAF  =0000024F               1875  TENS_SEGMENT_D_X2           equ     DISPLAY_X_POS+SEGMENT_LENGTH
+000E4AAF  =000001D6               1876  TENS_SEGMENT_D_Y1           equ     DISPLAY_Y_POS+SEGMENT_LENGTH+SEGMENT_LENGTH
+000E4AAF  =000001D6               1877  TENS_SEGMENT_D_Y2           equ     DISPLAY_Y_POS+SEGMENT_LENGTH+SEGMENT_LENGTH
+000E4AAF                          1878  
+000E4AAF  =0000023F               1879  TENS_SEGMENT_E_X1           equ     DISPLAY_X_POS
+000E4AAF  =0000023F               1880  TENS_SEGMENT_E_X2           equ     DISPLAY_X_POS
+000E4AAF  =000001C6               1881  TENS_SEGMENT_E_Y1           equ     DISPLAY_Y_POS+SEGMENT_LENGTH
+000E4AAF  =000001D6               1882  TENS_SEGMENT_E_Y2           equ     DISPLAY_Y_POS+SEGMENT_LENGTH+SEGMENT_LENGTH
+000E4AAF                          1883  
+000E4AAF  =0000023F               1884  TENS_SEGMENT_F_X1           equ     DISPLAY_X_POS
+000E4AAF  =0000023F               1885  TENS_SEGMENT_F_X2           equ     DISPLAY_X_POS
+000E4AAF  =000001B6               1886  TENS_SEGMENT_F_Y1           equ     DISPLAY_Y_POS
+000E4AAF  =000001C6               1887  TENS_SEGMENT_F_Y2           equ     DISPLAY_Y_POS+SEGMENT_LENGTH
+000E4AAF                          1888  
+000E4AAF  =0000023F               1889  TENS_SEGMENT_G_X1           equ     DISPLAY_X_POS
+000E4AAF  =0000024F               1890  TENS_SEGMENT_G_X2           equ     DISPLAY_X_POS+SEGMENT_LENGTH
+000E4AAF  =000001C6               1891  TENS_SEGMENT_G_Y1           equ     DISPLAY_Y_POS+SEGMENT_LENGTH
+000E4AAF  =000001C6               1892  TENS_SEGMENT_G_Y2           equ     DISPLAY_Y_POS+SEGMENT_LENGTH
+000E4AAF                          1893  
+000E4AAF                          1894  ******************
+000E4AAF                          1895  *** Sound Data ***
+000E4AAF                          1896  ******************
+000E4AAF  =00000049               1897  PLAY_SOUND_TRAP_TASK        EQU     73
+000E4AAF  =0000004A               1898  LOAD_DIRECT_X_TASK          EQU     74
+000E4AAF  =0000004D               1899  CONTROL_DIRECT_X_TASK       EQU     77
+000E4AAF  =00000001               1900  DIRECT_X_LOOP_CMD           EQU     1
+000E4AAF  =00000003               1901  DIRECT_X_STOP_CMD           EQU     3
+000E4AAF= 42 75 6C 6C 65 74 ...   1902  BulletFiredSound            dc.b    'BulletFired.wav', 0
+000E4ABF= 45 78 70 6C 6F 73 ...   1903  ExplosionSound              dc.b    'Explosion.wav', 0
+000E4ACD= 44 65 61 74 68 2E ...   1904  DeathSound                  dc.b    'Death.wav', 0
+000E4AD7= 42 61 63 6B 67 72 ...   1905  BackgroundMusic             dc.b    'BackgroundMusic.wav', 0
+000E4AEC= 00000001                1906  BackgroundMusicPlaying      dc.l    1
+000E4AF0                          1907  
+000E4AF0                          1908  ***************************
+000E4AF0                          1909  *** Loading screen data ***
+000E4AF0                          1910  ***************************
+000E4AF0  =0000005F               1911  DISPLAY_TEXT_TRAP_TASK      EQU     95
+000E4AF0  =00000118               1912  LOADING_TEXT_X_POS          EQU     280
+000E4AF0  =000000F0               1913  LOADING_TEXT_Y_POS          EQU     240
+000E4AF0= 4C 6F 61 64 69 6E ...   1914  LOADING_TEXT                dc.b    'Loading...', 0
+000E4AFB                          1915  
+000E4AFB                          1916  *****************************
+000E4AFB                          1917  *** Game over screen data ***
+000E4AFB                          1918  *****************************
+000E4AFB  =000000B9               1919  GAME_OVER_TEXT_X_POS        EQU     185
+000E4AFB  =000000F0               1920  GAME_OVER_TEXT_Y_POS        EQU     240
+000E4AFB= 47 61 6D 65 20 4F ...   1921  GAME_OVER_TEXT              dc.b    'Game Over. Press ENTER to continue', 0
+000E4B1E  =0000FF00               1922  CLEAR_SCREEN_VALUE          EQU     $FF00
+000E4B1E  =0000000B               1923  CLEAR_SCREEN_TASK           EQU     11
+000E4B1E  =0000000D               1924  ENTER_KEY                   EQU     $D
+000E4B1E                          1925  FIRST_RUN                   ds.l    1
+000E4B22                          1926  FIRST_REPAINT               ds.l    1
+000E4B26= 46 69 67 68 74 2E ...   1927  FightSound                  dc.b    'Fight.wav', 0
+000E4B30                          1928  
+000E4B30                          1929  *************************
+000E4B30                          1930  *** Start screen data ***
+000E4B30                          1931  *************************
+000E4B30  =60120000               1932  TITLE_FONT                  EQU     $60120000
+000E4B30  =600C0000               1933  STANDARD_FONT               EQU     $600C0000
+000E4B30  =00000015               1934  SET_FONT_TRAP_TASK          EQU     21
+000E4B30  =000000F0               1935  GAME_NAME_X_POS             EQU     240
+000E4B30  =000000C8               1936  GAME_NAME_Y_POS             EQU     200
+000E4B30  =000000F0               1937  DEV_NAME_X_POS              EQU     240
+000E4B30  =00000190               1938  DEV_NAME_Y_POS              EQU     400
+000E4B30  =00000096               1939  MUSIC_CRED_X_POS            EQU     150
+000E4B30  =000001AE               1940  MUSIC_CRED_Y_POS            EQU     DEV_NAME_Y_POS+30
+000E4B30  =000000F5               1941  PRESS_ENTER_X_POS           EQU     245
+000E4B30  =000000FA               1942  PRESS_ENTER_Y_POS           EQU     250
+000E4B30= 47 41 4C 41 47 41 ...   1943  GameName                    dc.b    'GALAGA(ISH)', 0
+000E4B3C= 43 72 65 61 74 65 ...   1944  DeveloperCredits            dc.b    'Created by: Dale Diaz', 0
+000E4B52= 52 6F 79 61 6C 74 ...   1945  MusicCredits                dc.b    'Royalty free music provided by: joshuaempyre', 0
+000E4B7F= 50 72 65 73 73 20 ...   1946  PressEnterToBeginText       dc.b    'Press ENTER to begin', 0
+000E4B94                          1947       
+000E4B94                          1948      END    START
+
+No errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+ALL_REG             7FFF
+ALL_REG_BYTE_SIZE   3C
+ARG_1               4
+ARG_2               8
+ARG_3               C
+ARG_4               10
+ARG_5               14
+ARG_6               18
+ASSERT_PLAYER_BOTTOM_COL  1BD6
+ASSERT_PLAYER_LEFT_COL  1B88
+ASSERT_PLAYER_RIGHT_COL  1BA2
+ASSERT_PLAYER_TOP_COL  1BBC
+ASSERT_PROJECTILE_ABOVE_LOWER  1948
+ASSERT_PROJECTILE_BELOW_UPPER  194E
+ASSERT_PROJECTILE_LEFT_OF_RIGHT  195A
+ASSERT_PROJECTILE_RIGHT_OF_LEFT  1954
+A_PRESSED           E4A42
+BACKGROUNDCHUNKHEIGHT  E3182
+BACKGROUNDCHUNKWIDTH  E317E
+BACKGROUNDHEIGHTLOCATION  214E
+BACKGROUNDIMAGE     2138
+BACKGROUNDIMAGEDATA  E3176
+BACKGROUNDIMAGEDATAOFFSET  2142
+BACKGROUNDIMAGEHEIGHT  E316E
+BACKGROUNDIMAGEWIDTH  E3172
+BACKGROUNDMUSIC     E4AD7
+BACKGROUNDMUSICPLAYING  E4AEC
+BACKGROUNDROWPADDING  E317A
+BACKGROUNDWIDTHLOCATION  214A
+BG_HEIGHT           1E0
+BG_WIDTH            280
+BITSPERPIXEL        18
+BULLETFIREDSOUND    E4AAF
+BYPASS_A_PRESSED    1738
+BYPASS_D_PRESSED    1716
+BYPASS_ENEMY_RESET  1A1E
+BYPASS_NO_INPUT     17C4
+BYPASS_PLAY_START_SOUND  11A8
+BYPASS_RENDER_NEXT_SEGMENT  1F24
+BYPASS_RENDER_NEXT_TENS_SEGMENT  1F58
+BYPASS_RENDER_OVER_PROJECTILE  1826
+BYPASS_RESPAWN_PLAYER  1B4A
+BYPASS_SET_GAME_STARTED  2098
+BYPASS_SPACE_PRESSED  17A2
+BYPASS_START_SCREEN  1054
+BYTESPERPIXEL       3
+CHECK_PLAYER_MOVING_LEFT  1A5A
+CHECK_PLAYER_MOVING_RIGHT  1A7E
+CLAMP_LOWER_X       1AD6
+CLAMP_UPPER_X       1AE6
+CLEAR_7_SEG_DISPLAY  1F80
+CLEAR_ENEMY_IMAGE   150A
+CLEAR_PLAYER_IMAGE  14C4
+CLEAR_SCREEN_TASK   B
+CLEAR_SCREEN_VALUE  FF00
+CONTROL_DIRECT_X_TASK  4D
+DEATHSOUND          E4ACD
+DESPAWN_PROJECTILE  18C4
+DEVELOPERCREDITS    E4B3C
+DEV_NAME_X_POS      F0
+DEV_NAME_Y_POS      190
+DIRECT_X_LOOP_CMD   1
+DIRECT_X_STOP_CMD   3
+DISPLAY_START_TEXT  209E
+DISPLAY_TEXT_TRAP_TASK  5F
+DISPLAY_X_POS       23F
+DISPLAY_Y_POS       1B6
+DISREGARD_ENEMY_PIXEL  1670
+DISREGARD_PLAYER_PIXEL  15BA
+DISREGARD_PROJECTILE_UPDATE  18FA
+DONT_FIRE_NEW_PROJECTILE  17A2
+DO_NOT_CLAMP_X      1AF6
+DO_NOT_COLLIDE      198C
+DO_NOT_COLLIDE_PLAYER  1C08
+DRAW_7SEG_A         1C0E
+DRAW_7SEG_A_TENS    1D7A
+DRAW_7SEG_B         1C42
+DRAW_7SEG_B_TENS    1DAE
+DRAW_7SEG_C         1C76
+DRAW_7SEG_C_TENS    1DE2
+DRAW_7SEG_D         1CAA
+DRAW_7SEG_D_TENS    1E16
+DRAW_7SEG_E         1CDE
+DRAW_7SEG_E_TENS    1E4A
+DRAW_7SEG_F         1D12
+DRAW_7SEG_F_TENS    1E7E
+DRAW_7SEG_G         1D46
+DRAW_7SEG_G_TENS    1EB2
+DRAW_LINE_TRAP_TASK  54
+DRAW_PIXEL_COMMAND  52
+D_PRESSED           E4A4A
+ENABLE_DOUBLE_BUFFERING  11
+END_X_CLAMP         1AEE
+END_X_VEL_ASSERTIONS  1A9E
+ENEMYCHUNKHEIGHT    E4A22
+ENEMYCHUNKWIDTH     E4A1E
+ENEMYHEIGHTLOCATION  E3DEE
+ENEMYIMAGE          E3DD8
+ENEMYIMAGEDATA      E4A16
+ENEMYIMAGEDATAOFFSET  E3DE2
+ENEMYIMAGEHEIGHT    E4A0E
+ENEMYIMAGEWIDTH     E4A12
+ENEMYROWPADDING     E4A1A
+ENEMYWIDTHLOCATION  E3DEA
+ENEMY_HEIGHT        20
+ENEMY_SPEED         E4A2E
+ENEMY_SPEED_INCREMENT  7D
+ENEMY_WIDTH         20
+ENEMY_X_POS         E4A26
+ENEMY_Y_POS         E4A2A
+ENTER_KEY           D
+EXPLOSIONSOUND      E4ABF
+FIGHTSOUND          E4B26
+FIRST_REPAINT       E4B22
+FIRST_RUN           E4B1E
+FIVE_ARGS           14
+FOUR_ARGS           10
+GAMENAME            E4B30
+GAME_LOOP           117E
+GAME_NAME_X_POS     F0
+GAME_NAME_Y_POS     C8
+GAME_OVER           1216
+GAME_OVER_TEXT      E4AFB
+GAME_OVER_TEXT_X_POS  B9
+GAME_OVER_TEXT_Y_POS  F0
+GENERATE_BACKGROUND_IMAGE_DATA  1272
+GENERATE_ENEMY_IMAGE_DATA  146E
+GENERATE_PLAYER_IMAGE_DATA  1418
+GETRANDOMBYTEINTOD6  2004
+GETRANDOMLONGINTOD6  203E
+GET_TIME_COMMAND    8
+HANDLE_PLAYER_COLLISION  1B50
+HANDLE_PROJECTILE_COLLISION  1900
+HAVE_HAD_NO_INPUT   E4A5A
+IGNORE_RENDER_PROJECTILE  1868
+ITERATE_OVER_BACKGROUND_CHUNK  1314
+ITERATE_OVER_DISPLAY_VALUE  1F0C
+ITERATE_OVER_ENEMY_CHUNK  164E
+ITERATE_OVER_PLAYER_CHUNK  1598
+ITERATE_OVER_TENS_DISPLAY_VALUE  1F40
+LED_INSTRUCTION_TABLE  E4A66
+LINE_RENDERING_REGS  1F
+LISTEN_FOR_GAME_START  2072
+LISTEN_FOR_INPUTS   13
+LISTEN_FOR_RESTART  1B24
+LOADING_TEXT        E4AF0
+LOADING_TEXT_X_POS  118
+LOADING_TEXT_Y_POS  F0
+LOAD_DIRECT_X_TASK  4A
+MOVE_TO_NEXT_LINE_BG_IMAGE  133A
+MOVE_TO_NEXT_LINE_ENEMY_IMAGE  1680
+MOVE_TO_NEXT_LINE_PLAYER_IMAGE  15CA
+MOVING_DOWN         1
+MOVING_LEFT         FFFFF9C0
+MOVING_RIGHT        640
+MOVING_UP           FFFFFFFF
+MUSICCREDITS        E4B52
+MUSIC_CRED_X_POS    96
+MUSIC_CRED_Y_POS    1AE
+NINC0               201A
+NINC1               2022
+NO_INPUT            17A6
+ONES_SEGMENT_OFFSET  18
+ONE_ARG             4
+ONE_BYTE            8
+PLAYERCHUNKHEIGHT   E3DD0
+PLAYERCHUNKWIDTH    E3DCC
+PLAYERHEIGHTLOCATION  E319C
+PLAYERIMAGE         E3186
+PLAYERIMAGEDATA     E3DC4
+PLAYERIMAGEDATAOFFSET  E3190
+PLAYERIMAGEHEIGHT   E3DBC
+PLAYERIMAGEWIDTH    E3DC0
+PLAYERROWPADDING    E3DC8
+PLAYERWIDTHLOCATION  E3198
+PLAYER_ALIVE        E4A5E
+PLAYER_HEIGHT       20
+PLAYER_POINTS       E4A62
+PLAYER_WIDTH        20
+PLAYER_X_POSITION   E3DD4
+PLAYER_X_VEL        E4A52
+PLAYER_Y_POSITION   184
+PLAYER_Y_VEL        E4A56
+PLAY_SOUND_TRAP_TASK  49
+PLAY_START_SOUND    1190
+PRESSENTERTOBEGINTEXT  E4B7F
+PRESS_ENTER_X_POS   F5
+PRESS_ENTER_Y_POS   FA
+PROJECTILE_FIRED    E4A3A
+PROJECTILE_LENGTH   14
+PROJECTILE_POS_OFFSET  E
+PROJECTILE_SPEED    9
+PROJECTILE_X_POS    E4A32
+PROJECTILE_Y_POS    E4A36
+RANDOMVAL           2130
+REDRAW_SCREEN       1244
+RENDER_7SEG_VALUE   1EE6
+RENDER_BACKGROUND_CHUNK  12C8
+RENDER_BG_OVER_PROJECTILE  17D2
+RENDER_ENEMY_CHUNK  1602
+RENDER_INITIAL_BACKGROUND_IMAGE  1372
+RENDER_INITIAL_ENEMY_IMAGE  13E0
+RENDER_INITIAL_PLAYER_IMAGE  13A8
+RENDER_NEXT_SEGMENT  1F1E
+RENDER_NEXT_TENS_SEGMENT  1F52
+RENDER_PLAYER_CHUNK  154C
+RENDER_PROJECTILE   182C
+REPAINT_SCREEN      5E
+RESET_ENEMY_TO_TOP  1A0C
+RESPAWN_ENEMY       1992
+RESPAWN_PLAYER      1B40
+SCORE_TEXT          E4AA8
+SCORE_TEXT_X_POS    23F
+SCORE_TEXT_Y_POS    1A7
+SEEDRANDOMNUMBER    1FEC
+SEGMENT_A_X1        257
+SEGMENT_A_X2        267
+SEGMENT_A_Y1        1B6
+SEGMENT_A_Y2        1B6
+SEGMENT_B_X1        267
+SEGMENT_B_X2        267
+SEGMENT_B_Y1        1B6
+SEGMENT_B_Y2        1C6
+SEGMENT_C_X1        267
+SEGMENT_C_X2        267
+SEGMENT_C_Y1        1C6
+SEGMENT_C_Y2        1D6
+SEGMENT_D_X1        257
+SEGMENT_D_X2        267
+SEGMENT_D_Y1        1D6
+SEGMENT_D_Y2        1D6
+SEGMENT_E_X1        257
+SEGMENT_E_X2        257
+SEGMENT_E_Y1        1C6
+SEGMENT_E_Y2        1D6
+SEGMENT_FUNCTION_TABLE  E4A70
+SEGMENT_F_X1        257
+SEGMENT_F_X2        257
+SEGMENT_F_Y1        1B6
+SEGMENT_F_Y2        1C6
+SEGMENT_G_X1        257
+SEGMENT_G_X2        267
+SEGMENT_G_Y1        1C6
+SEGMENT_G_Y2        1C6
+SEGMENT_LENGTH      10
+SET_A_PRESSED       172E
+SET_DRAWING_MODE_COMMAND  5C
+SET_D_PRESSED       170C
+SET_FONT_TRAP_TASK  15
+SET_GAME_STARTED    208E
+SET_PEN_COLOR_COMMAND  50
+SET_PLAYER_MOVING_LEFT  1A6E
+SET_PLAYER_MOVING_RIGHT  1A92
+SET_SPACE_PRESSED   1750
+SHOW_START_SCREEN   1038
+SIX_ARGS            18
+SPACE_KEY           20
+SPACE_PRESSED       E4A4E
+STANDARD_FONT       600C0000
+START               1000
+START_NEW_GAME      1038
+SWAP_LONG_IN_D7     1250
+S_PRESSED           E4A46
+TEMPRANDOMLONG      2134
+TENS_SEGMENT_A_X1   23F
+TENS_SEGMENT_A_X2   24F
+TENS_SEGMENT_A_Y1   1B6
+TENS_SEGMENT_A_Y2   1B6
+TENS_SEGMENT_B_X1   24F
+TENS_SEGMENT_B_X2   24F
+TENS_SEGMENT_B_Y1   1B6
+TENS_SEGMENT_B_Y2   1C6
+TENS_SEGMENT_C_X1   24F
+TENS_SEGMENT_C_X2   24F
+TENS_SEGMENT_C_Y1   1C6
+TENS_SEGMENT_C_Y2   1D6
+TENS_SEGMENT_D_X1   23F
+TENS_SEGMENT_D_X2   24F
+TENS_SEGMENT_D_Y1   1D6
+TENS_SEGMENT_D_Y2   1D6
+TENS_SEGMENT_E_X1   23F
+TENS_SEGMENT_E_X2   23F
+TENS_SEGMENT_E_Y1   1C6
+TENS_SEGMENT_E_Y2   1D6
+TENS_SEGMENT_FUNCTION_TABLE  E4A8C
+TENS_SEGMENT_F_X1   23F
+TENS_SEGMENT_F_X2   23F
+TENS_SEGMENT_F_Y1   1B6
+TENS_SEGMENT_F_Y2   1C6
+TENS_SEGMENT_G_X1   23F
+TENS_SEGMENT_G_X2   24F
+TENS_SEGMENT_G_Y1   1C6
+TENS_SEGMENT_G_Y2   1C6
+THREE_ARGS          C
+TITLE_FONT          60120000
+TWO_ARGS            8
+UPDATE_ENEMY_VALUES  19D2
+UPDATE_PLAYER_INPUT  16B8
+UPDATE_PLAYER_POSITION  1AA8
+UPDATE_PLAYER_VALUES  1A48
+UPDATE_PROJECTILE   186E
+W_PRESSED           E4A3E
